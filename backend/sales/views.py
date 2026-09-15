@@ -1,7 +1,4 @@
-from decimal import Decimal
-
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -9,12 +6,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from catalog.models import Product
-from core.dates import today_and_week_start
 from core.tenancy import get_current_company
 
 from .models import Sale
 from .serializers import SaleCreateSerializer, SaleSerializer
-from .services import crear_venta
+from .services import consultar_ventas, crear_venta
 
 
 class SaleListCreateView(generics.ListCreateAPIView):
@@ -70,17 +66,4 @@ class SaleSummaryView(APIView):
 
     def get(self, request):
         company = get_current_company(request)
-        today_start, week_start = today_and_week_start()
-
-        base = Sale.objects.for_company(company).filter(status=Sale.Status.CONFIRMED)
-
-        def summarize(since):
-            aggregate = base.filter(sold_at__gte=since).aggregate(
-                total=Sum("total"), count=Count("id")
-            )
-            return {
-                "total": str(aggregate["total"] or Decimal("0.00")),
-                "count": aggregate["count"] or 0,
-            }
-
-        return Response({"today": summarize(today_start), "week": summarize(week_start)})
+        return Response(consultar_ventas(company=company))

@@ -5,6 +5,52 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 7 — Capa de herramientas para el asistente (sin LLM)
+
+- Modelos `Conversation`, `Message` y **`PendingAction`** (nueva
+  entidad, no estaba en el modelo original — documentada en
+  `docs/DATA_MODEL.md` — materializa la máquina de estados de
+  confirmación `pending → confirmed/cancelled/expired`).
+- Registro de intents soportados (`assistant/intents.py`):
+  `crear_venta`, `registrar_compra`, `ajustar_inventario` (mutantes,
+  requieren confirmación) y `consultar_ventas`, `consultar_stock_bajo`
+  (solo lectura, se ejecutan de inmediato). Cada intent reutiliza sin
+  cambios el Tool Layer ya construido (`crear_venta`,
+  `registrar_compra`, `ajustar_inventario`, y las nuevas funciones de
+  solo lectura `sales.consultar_ventas` / `catalog.consultar_stock_bajo`,
+  extraídas de `SaleSummaryView`/`cashbox.obtener_resumen` para
+  eliminar duplicación).
+- Máquina de confirmación (`assistant/services.py`):
+  `proponer_intent` (valida forma; ejecuta de inmediato si es de solo
+  lectura, o crea una propuesta pendiente si es mutante — sin ejecutar
+  nada todavía), `confirmar_intent` (**revalida por completo** los
+  parámetros antes de ejecutar, porque el estado del negocio pudo
+  cambiar entre proponer y confirmar) y `cancelar_intent`. Propuestas
+  pendientes expiran a los 10 minutos.
+- Endpoints: `GET/POST /api/assistant/conversations/`,
+  `GET/POST /api/assistant/conversations/<id>/messages/`,
+  `POST /api/assistant/intents/`,
+  `POST /api/assistant/intents/<id>/confirm/`,
+  `POST /api/assistant/intents/<id>/cancel/`.
+- **Bug real encontrado y corregido antes de empujar**: al marcar una
+  propuesta vencida como `expired`, la excepción se lanzaba dentro del
+  mismo `transaction.atomic()` que guardaba ese estado, así que el
+  rollback deshacía el propio guardado. Se corrigió separando el
+  guardado (que debe persistir) del `raise` (que ahora ocurre después,
+  fuera de la transacción).
+- 26 tests nuevos (117 en total): unit de cada intent (válido e
+  inválido, incluyendo doble confirmación, expiración, y revalidación
+  cuando el stock cambia entre proponer y confirmar) e integración de
+  la API cubriendo el flujo completo propuesta → confirmación →
+  ejecución → auditoría, más el gate obligatorio de seguridad (un
+  intent que referencia un producto/empresa ajena es rechazado).
+- Verificado localmente: migraciones desde cero, suite completa en
+  verde, y un recorrido manual por HTTP enviando a mano el JSON que
+  "debería" producir un LLM (`{"intent": "crear_venta", ...}`),
+  confirmando, y viendo la venta y el stock reflejados — el guion de
+  demo completo funcionando sin ningún LLM todavía.
+- Sin LLM real todavía (eso es Fase 8).
+
 ### Fase 6 — Caja y dashboard/resumen
 
 - Tool Layer de solo lectura `obtener_resumen` (`cashbox/services.py`):

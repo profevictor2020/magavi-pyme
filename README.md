@@ -9,14 +9,17 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
-**Fase 6 — Caja y dashboard/resumen.** `GET /api/cashbox/summary/` es
-ahora la fuente única de verdad de "cómo va el negocio hoy" (caja,
-ventas y stock bajo, hoy y esta semana), reutilizando sin duplicar la
-lógica de `sales`/`catalog`/`cashbox` ya construida. La vista visual de
-dashboard en el frontend se difiere deliberadamente a la Fase 10 (ver
-`docs/ROADMAP.md` Fase 6), para no construir pantallas con
-login/selección de empresa antes de tiempo y tener que rehacerlas.
-Todavía no hay asistente conversacional — eso empieza en la Fase 7.
+**Fase 7 — Capa de herramientas para el asistente (sin LLM).** Existe el
+contrato completo entre "intención estructurada" y "ejecución": un
+registro de intents soportados (`crear_venta`, `registrar_compra`,
+`ajustar_inventario`, `consultar_ventas`, `consultar_stock_bajo`), una
+máquina de estados de confirmación (`pending → confirmed/cancelled/
+expired`) que revalida todo al confirmar, y un adaptador que ejecuta
+cada intent contra el Tool Layer ya construido en fases anteriores, sin
+duplicar lógica de negocio. El guion "vendí 3 cafés → confirmar →
+queda registrado → ¿cuánto vendí hoy? refleja el cambio" ya funciona de
+punta a punta enviando el JSON del intent a mano — el mismo formato que
+producirá el LLM en la Fase 8, que es lo único que falta conectar.
 
 No avanzamos de fase sin que la anterior esté probada y aprobada.
 

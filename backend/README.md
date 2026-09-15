@@ -34,9 +34,13 @@ SaleItem + Tool Layer `crear_venta`), `purchases` (Purchase,
 PurchaseItem + Tool Layer `registrar_compra`), `cashbox` (CashMovement +
 Tool Layer de solo lectura `obtener_resumen`, la fuente única de verdad
 del dashboard), `audit` (AuditLog append-only, escrito por el Tool
-Layer; sin endpoints todavía), `documents`, `assistant`. Ver
-`docs/ARCHITECTURE.md` para el propósito de cada una. `documents` y
-`assistant` siguen vacías hasta su fase correspondiente.
+Layer; sin endpoints todavía), `assistant` (Conversation, Message,
+PendingAction; `intents.py` registra los intents soportados y los
+ejecuta contra el Tool Layer existente; `services.py` implementa la
+máquina de confirmación `proponer_intent`/`confirmar_intent`/
+`cancelar_intent` — ver `docs/ARCHITECTURE.md` #3.4), `documents`. Ver
+`docs/ARCHITECTURE.md` para el propósito de cada una. `documents` sigue
+vacía hasta la Fase 9.
 
 ## Endpoints
 
@@ -82,6 +86,22 @@ Layer; sin endpoints todavía), `documents`, `assistant`. Ver
   duplicar lógica; el asistente (Fase 8) consumirá este mismo Tool Layer
   (`cashbox/services.py::obtener_resumen`) directamente, sin pasar por
   HTTP.
+- `GET/POST /api/assistant/conversations/` — "mis conversaciones" / crear
+  una nueva.
+- `GET/POST /api/assistant/conversations/<id>/messages/` — historial de
+  una conversación / agregar un mensaje.
+- `POST /api/assistant/intents/` —
+  `{"intent": "crear_venta", "parameters": {...}, "conversation_id": opcional}`.
+  Intents soportados: `crear_venta`, `registrar_compra`,
+  `ajustar_inventario` (mutantes, requieren confirmación) y
+  `consultar_ventas`, `consultar_stock_bajo` (de solo lectura, se
+  ejecutan de inmediato). Sin LLM todavía (Fase 7): el intent se manda
+  ya armado, tal como lo produciría el LLM en la Fase 8.
+- `POST /api/assistant/intents/<id>/confirm/` — ejecuta de verdad una
+  propuesta pendiente (revalidándola por completo primero — el estado
+  pudo cambiar desde que se propuso).
+- `POST /api/assistant/intents/<id>/cancel/` — cancela una propuesta
+  pendiente.
 
 Todos los endpoints de negocio requieren el header `X-Company-Id` con la
 empresa activa; ver `core/tenancy.py`.

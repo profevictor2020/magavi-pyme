@@ -2,9 +2,11 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Count, Sum
 
 from audit.services import registrar_auditoria
 from cashbox.models import CashMovement
+from core.dates import today_and_week_start
 from inventory.services import ajustar_inventario
 
 from .models import Sale, SaleItem
@@ -93,3 +95,21 @@ def crear_venta(*, company, user, items, origen="manual", customer_name=""):
         )
 
     return sale
+
+
+def consultar_ventas(*, company):
+    """Tool Layer de solo lectura: ventas de hoy y de la semana (ver
+    docs/ROADMAP.md Fase 4/6/7). Usado por `GET /api/sales/summary/`,
+    por `cashbox.obtener_resumen` y por el asistente conversacional.
+    """
+    today_start, week_start = today_and_week_start()
+    base = Sale.objects.for_company(company).filter(status=Sale.Status.CONFIRMED)
+
+    def summarize(since):
+        aggregate = base.filter(sold_at__gte=since).aggregate(total=Sum("total"), count=Count("id"))
+        return {
+            "total": str(aggregate["total"] or Decimal("0.00")),
+            "count": aggregate["count"] or 0,
+        }
+
+    return {"today": summarize(today_start), "week": summarize(week_start)}
