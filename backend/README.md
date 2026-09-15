@@ -29,10 +29,13 @@ pytest
 `get_current_company`, `managers.py` con `CompanyScopedManager`),
 `accounts` (usuario custom + JWT), `companies` (Company, CompanyUser,
 Module, CompanyModule), `catalog` (Product), `inventory`
-(InventoryMovement + Tool Layer `ajustar_inventario`), `sales`,
-`purchases`, `cashbox`, `documents`, `assistant`, `audit`. Ver
-`docs/ARCHITECTURE.md` para el propósito de cada una. Desde `sales` en
-adelante siguen vacías hasta su fase correspondiente.
+(InventoryMovement + Tool Layer `ajustar_inventario`), `sales` (Sale,
+SaleItem + Tool Layer `crear_venta`), `cashbox` (CashMovement, escrito
+por `crear_venta`; sin endpoints propios todavía), `audit` (AuditLog
+append-only, escrito por el Tool Layer; sin endpoints todavía),
+`purchases`, `documents`, `assistant`. Ver `docs/ARCHITECTURE.md` para
+el propósito de cada una. Desde `purchases` en adelante siguen vacías
+hasta su fase correspondiente.
 
 ## Endpoints
 
@@ -56,7 +59,15 @@ adelante siguen vacías hasta su fase correspondiente.
 - `POST /api/products/<id>/adjust-stock/` — ajuste manual de stock
   (`{"cantidad": "-3", "motivo": "..."}`); rechaza dejar el stock en
   negativo (ver `docs/DECISIONS.md` ADR-009).
+- `GET/POST /api/sales/` — listar (con filtros opcionales `?from=` /
+  `?to=`, formato `YYYY-MM-DD`) / crear una venta:
+  `{"items": [{"product_id": 1, "quantity": "3", "unit_price": "2500.00"}], "customer_name": "..."}`
+  (`unit_price` es opcional, por defecto `Product.default_price`).
+  Actualiza stock e ingreso de caja en la misma transacción (Tool Layer
+  `crear_venta`).
+- `GET /api/sales/summary/` — `{"today": {"total": ..., "count": ...},
+  "week": {...}}`, soporte directo a "¿cuánto vendí hoy?" del guion de
+  demo.
 
-Todos los endpoints de negocio (productos y los que vienen en fases
-siguientes) requieren el header `X-Company-Id` con la empresa activa; ver
-`core/tenancy.py`.
+Todos los endpoints de negocio requieren el header `X-Company-Id` con la
+empresa activa; ver `core/tenancy.py`.

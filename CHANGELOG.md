@@ -5,6 +5,33 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 4 — Ventas
+
+- Modelos `Sale`/`SaleItem` (`sales`), `CashMovement` (`cashbox`) y
+  `AuditLog` (`audit`, append-only — no editable/borrable ni desde el
+  admin de Django).
+- Tool Layer `crear_venta` (`sales/services.py`): único punto de
+  escritura de ventas. Valida ítems, calcula totales, descuenta stock
+  reutilizando sin cambios `ajustar_inventario` (Fase 3), registra el
+  ingreso de caja y una entrada de auditoría — todo en una única
+  transacción atómica (si un ítem no tiene stock suficiente, no queda
+  venta, movimiento de inventario ni de caja huérfanos).
+- Decisión explícita documentada (ADR-009, reutilizada de Fase 3): no se
+  permite stock negativo, tampoco en ventas.
+- Endpoints: `GET/POST /api/sales/` (con filtros de fecha) y `GET
+  /api/sales/summary/` (ventas de hoy/semana — soporte directo al "¿cuánto
+  vendí hoy?" del guion de demo).
+- 20 tests nuevos (62 en total): unit del Tool Layer (cálculo de
+  totales, descuento de stock, movimiento de caja, atomicidad ante
+  fallo de un ítem, rechazo de producto de otra empresa) e integración
+  de la API (creación, listado, resumen, y el gate obligatorio de
+  aislamiento multiempresa).
+- Verificado localmente: migraciones desde cero, suite completa en
+  verde, y recorrido manual por HTTP replicando el guion de demo
+  (vender 3 cafés, ver el resumen de "hoy" actualizarse, ver el stock
+  descontado, e intentos inválidos correctamente rechazados).
+- Sin compras ni asistente todavía (eso es Fase 5 en adelante).
+
 ### Fase 3 — Productos + inventario
 
 - Modelo `Product` (`catalog`), con scope de empresa

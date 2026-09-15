@@ -8,7 +8,9 @@ from catalog.models import Product
 from .models import InventoryMovement
 
 
-def ajustar_inventario(*, company, user, product: Product, cantidad, motivo: str, origen="manual"):
+def ajustar_inventario(
+    *, company, user, product: Product, cantidad, motivo: str, origen="manual", reference_id=None
+):
     """Tool Layer: único punto de escritura de movimientos de inventario.
 
     Usado tanto por el endpoint de ajuste manual (Fase 3) como, en fases
@@ -52,6 +54,7 @@ def ajustar_inventario(*, company, user, product: Product, cantidad, motivo: str
             type=movement_type,
             quantity=cantidad,
             reference_type=origen,
+            reference_id=reference_id,
             reason=motivo,
             balance_after=nuevo_stock,
             created_by=user,

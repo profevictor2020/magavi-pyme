@@ -9,12 +9,12 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
-**Fase 3 — Productos + inventario.** Sobre la base de auth +
-multi-tenancy de la Fase 2, existe CRUD de productos (sin borrado
-físico) y el Tool Layer de inventario (`ajustar_inventario`): ajustes de
-stock transaccionales, con stock cacheado por producto y su historial
-auditable en `InventoryMovement`. Todavía no hay ventas, compras ni
-asistente — eso empieza en la Fase 4.
+**Fase 4 — Ventas.** El Tool Layer `crear_venta` registra una venta,
+descuenta stock (reutilizando `ajustar_inventario` de la Fase 3), genera
+el ingreso de caja correspondiente y una entrada de auditoría — todo en
+una transacción atómica. `GET /api/sales/summary/` ya responde
+"¿cuánto vendí hoy?", el primer pedazo real del guion de demo. Todavía
+no hay compras ni asistente conversacional — eso empieza en la Fase 5.
 
 No avanzamos de fase sin que la anterior esté probada y aprobada.
 
