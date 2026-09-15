@@ -6,6 +6,7 @@ Toda config sensible/entorno-dependiente se lee de variables de entorno
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -43,6 +44,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Terceros
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     # Apps de MAGAVI (módulos de negocio; sin modelos propios todavía)
     "core",
@@ -104,11 +106,22 @@ DATABASES = {
 }
 
 
+AUTH_USER_MODEL = "accounts.User"
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+# Argon2 primero: ver docs/SECURITY.md #2. Se mantienen los hashers de
+# Django como fallback para verificar hashes existentes si algún día se
+# migra el algoritmo.
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
 ]
 
 
@@ -122,12 +135,21 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Autenticación (JWT) se configura en Fase 2. Por ahora solo se fija el
-# default de permisos: cerrado por defecto (deny-by-default, ver
-# docs/SECURITY.md), cada vista pública debe declarar AllowAny de forma
-# explícita.
+# Deny-by-default (ver docs/SECURITY.md): cada vista pública debe declarar
+# AllowAny de forma explícita.
 REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
 }

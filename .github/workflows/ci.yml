@@ -27,7 +27,7 @@ jobs:
       POSTGRES_DB: magavi
       POSTGRES_USER: magavi
       POSTGRES_PASSWORD: magavi_test_password
-      DJANGO_SECRET_KEY: ci-test-secret-key
+      DJANGO_SECRET_KEY: ci-test-secret-key-with-enough-entropy-for-hs256-please
     defaults:
       run:
         working-directory: backend

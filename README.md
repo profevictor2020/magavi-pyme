@@ -9,11 +9,12 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
-**Fase 1 — Estructura del proyecto + Docker + PostgreSQL.** Existe la
-estructura base del backend (Django + DRF, apps de dominio vacías) y del
-frontend (React + Vite), levantables con Docker Compose contra
-PostgreSQL. Todavía no hay modelos de negocio, autenticación ni UI real —
-eso empieza en la Fase 2.
+**Fase 2 — Usuarios + empresas + autenticación + multi-tenancy.** Existe
+autenticación JWT (registro/login/logout), usuario custom, y el modelo
+`Company`/`CompanyUser`/`Module`/`CompanyModule`. El aislamiento
+multiempresa ya está implementado y probado: cada usuario solo ve/crea
+datos de las empresas donde tiene membresía activa. Todavía no hay
+productos, ventas, inventario ni asistente — eso empieza en la Fase 3.
 
 No avanzamos de fase sin que la anterior esté probada y aprobada.
 

@@ -5,6 +5,34 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 2 — Usuarios + empresas + autenticación + multi-tenancy
+
+- Modelo de usuario custom (`accounts.User`, login por email) con
+  Argon2 como hasher de contraseña.
+- Autenticación JWT (`djangorestframework-simplejwt`): registro
+  (`POST /api/auth/register/`), login (`/login/`), refresh
+  (`/refresh/`), logout con blacklist de refresh token (`/logout/`),
+  usuario actual (`/me/`).
+- Modelos `Company`, `CompanyUser` (con rol owner/admin/staff),
+  `Module`, `CompanyModule`.
+- `POST/GET /api/companies/` ("mis empresas" / crear empresa, el
+  creador queda como owner) y `GET /api/companies/<id>/`.
+- Mecanismo de aislamiento multiempresa: `core/tenancy.py`
+  (`get_current_company`, resuelve la empresa activa vía header
+  `X-Company-Id` validando membresía) y `core/managers.py`
+  (`CompanyScopedManager`, hace fallar cualquier query sobre un modelo
+  con scope de empresa que no pase por `.for_company(company)`).
+- Suite de aislamiento multiempresa (gate obligatorio desde esta fase,
+  ver `docs/TESTING.md`): 22 tests cubriendo registro, login, logout,
+  creación de empresa, y — el foco de la fase — que un usuario nunca ve
+  ni accede (404, no 403) a datos de una empresa ajena.
+- Verificado localmente: migraciones aplicadas desde cero contra
+  PostgreSQL real, suite completa en verde, y un recorrido manual por
+  HTTP (2 usuarios, 2 empresas) confirmando que cada uno solo ve la
+  suya.
+- Sin productos, ventas, inventario ni asistente todavía (eso es Fase 3
+  en adelante).
+
 ### Fase 1 — Estructura del proyecto + Docker + PostgreSQL
 
 - Backend Django + DRF: proyecto `config`, apps de dominio vacías
