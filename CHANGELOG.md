@@ -16,7 +16,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   build verificados.
 - `docker-compose.yml` (postgres, backend, frontend) y `.env.example`.
 - CI (GitHub Actions): job backend (`ruff` + `pytest` contra Postgres
-  real) y job frontend (`lint` + `build`).
+  real), job frontend (`lint` + `build`), y job `compose` que ejecuta
+  `docker compose up --build` real y verifica backend y frontend por
+  HTTP — permite validar la Fase 1 sin necesidad de Docker local.
 - Verificado localmente: migraciones aplicadas, test de health en verde,
   servidor real respondiendo a `curl`, build de frontend sin errores.
 - Sin modelos de negocio, autenticación ni UI real todavía (eso es Fase

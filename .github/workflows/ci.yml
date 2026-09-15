@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:
@@ -59,3 +58,41 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar .env
+        run: cp .env.example .env
+      - name: Levantar stack completo (docker compose up)
+        run: docker compose up --build -d
+      - name: Esperar y verificar backend (/api/health/)
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/api/health/; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "El backend no respondio 200 en /api/health/" >&2
+          docker compose logs
+          exit 1
+      - name: Verificar frontend (servidor Vite responde)
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "El frontend no respondio en :5173" >&2
+          docker compose logs
+          exit 1
+      - name: Logs (siempre, para diagnostico)
+        if: always()
+        run: docker compose logs
+      - name: Apagar stack
+        if: always()
+        run: docker compose down -v

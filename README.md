@@ -30,6 +30,15 @@ docker compose up --build
 Ver `backend/README.md` y `frontend/README.md` para desarrollo sin
 Docker.
 
+### Si no tienes Docker disponible
+
+El workflow de CI (`.github/workflows/ci.yml`, job `compose`) ejecuta
+exactamente este mismo `docker compose up` en GitHub Actions en cada
+push, y falla si el backend o el frontend no responden. Puedes verificar
+la Fase 1 (y cualquier fase futura) revisando que ese check esté en verde
+en la pestaña **Actions** del repositorio, sin necesidad de instalar
+Docker localmente.
+
 ## Documentación
 
 - [`docs/PRODUCT.md`](docs/PRODUCT.md) — visión de producto, alcance y
