@@ -222,3 +222,32 @@ de módulo (apps Django + Tool Layer) están puestos deliberadamente para
 que una futura extracción a servicios (si el crecimiento lo justifica) no
 requiera reescribir la lógica de negocio, solo mover su frontera de
 despliegue.
+
+---
+
+## ADR-009 — No se permite stock negativo en movimientos de inventario
+
+**Contexto:** `docs/ROADMAP.md` Fase 3/4 exige decidir explícitamente qué
+pasa cuando un movimiento (ajuste manual, y más adelante una venta) dejaría
+el stock de un producto en negativo, en vez de asumirlo en silencio.
+
+**Decisión:** `ajustar_inventario` (Tool Layer, `inventory/services.py`)
+rechaza cualquier movimiento cuyo `balance_after` resultante sea negativo,
+lanzando `ValidationError` (HTTP 400 en la API). El cálculo y la
+validación ocurren dentro de una transacción con `select_for_update()`
+sobre el producto, para evitar condiciones de carrera entre ajustes
+concurrentes del mismo producto.
+
+**Alternativas consideradas:** permitir stock negativo (útil para negocios
+que venden "a cuenta" antes de reponer) y marcarlo solo como advertencia.
+
+**Por qué no:** para un MVP dirigido a dueños de almacén sin experiencia
+en software, un stock negativo silencioso es más confuso que útil, y
+esconde errores de captura (cantidad mal escrita, producto equivocado).
+Rechazar explícitamente fuerza a corregir el dato en el momento.
+
+**Consecuencias:** si en el futuro se detecta un caso de negocio real que
+necesite permitir stock negativo (p.ej. pre-venta), se puede agregar como
+una opción explícita por producto o por empresa — no como comportamiento
+por defecto. Esta misma regla la heredan `crear_venta` (Fase 4) y
+`registrar_compra` (Fase 5), que reutilizan `ajustar_inventario`.

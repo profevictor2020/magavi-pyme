@@ -9,12 +9,12 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
-**Fase 2 — Usuarios + empresas + autenticación + multi-tenancy.** Existe
-autenticación JWT (registro/login/logout), usuario custom, y el modelo
-`Company`/`CompanyUser`/`Module`/`CompanyModule`. El aislamiento
-multiempresa ya está implementado y probado: cada usuario solo ve/crea
-datos de las empresas donde tiene membresía activa. Todavía no hay
-productos, ventas, inventario ni asistente — eso empieza en la Fase 3.
+**Fase 3 — Productos + inventario.** Sobre la base de auth +
+multi-tenancy de la Fase 2, existe CRUD de productos (sin borrado
+físico) y el Tool Layer de inventario (`ajustar_inventario`): ajustes de
+stock transaccionales, con stock cacheado por producto y su historial
+auditable en `InventoryMovement`. Todavía no hay ventas, compras ni
+asistente — eso empieza en la Fase 4.
 
 No avanzamos de fase sin que la anterior esté probada y aprobada.
 

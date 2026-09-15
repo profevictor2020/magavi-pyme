@@ -5,6 +5,37 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 3 — Productos + inventario
+
+- Modelo `Product` (`catalog`), con scope de empresa
+  (`CompanyScopedManager`), CRUD vía API sin borrado físico (`DELETE`
+  devuelve 405; se desactiva con `is_active`), SKU único por empresa
+  (nullable), stock cacheado (`current_stock`) y umbral de stock bajo
+  configurable por producto (`low_stock_threshold`).
+- Modelo `InventoryMovement` (`inventory`) como historial auditable de
+  cada cambio de stock (delta con signo, saldo resultante, motivo, quién
+  y cuándo).
+- Tool Layer `ajustar_inventario` (`inventory/services.py`): único punto
+  de escritura de movimientos de inventario, transaccional con
+  `select_for_update()` para evitar condiciones de carrera, y que
+  rechaza explícitamente dejar el stock en negativo (ver
+  `docs/DECISIONS.md` ADR-009). Pensado para ser reutilizado sin cambios
+  por `crear_venta`/`registrar_compra` (Fases 4/5) y por el asistente
+  (Fase 8).
+- Endpoints: `GET/POST /api/products/` (con `initial_stock` opcional al
+  crear y filtro `?low_stock=true`), `GET/PATCH/PUT
+  /api/products/<id>/`, `POST /api/products/<id>/adjust-stock/`.
+- 20 tests nuevos (42 en total): unit del Tool Layer (ajustes positivos y
+  negativos, rechazo de stock negativo, rechazo de producto de otra
+  empresa) e integración de la API (CRUD, SKU único por empresa, stock
+  bajo, y el gate obligatorio de aislamiento multiempresa aplicado a
+  productos).
+- Verificado localmente: migraciones desde cero, suite completa en
+  verde, y un recorrido manual por HTTP (crear producto con stock
+  inicial, ajustar stock, ver stock bajo, e intentos inválidos
+  correctamente rechazados).
+- Sin ventas, compras ni asistente todavía (eso es Fase 4 en adelante).
+
 ### Fase 2 — Usuarios + empresas + autenticación + multi-tenancy
 
 - Modelo de usuario custom (`accounts.User`, login por email) con

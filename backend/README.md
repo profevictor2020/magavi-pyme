@@ -28,10 +28,11 @@ pytest
 `core` (utilidades transversales: health check, `tenancy.py` con
 `get_current_company`, `managers.py` con `CompanyScopedManager`),
 `accounts` (usuario custom + JWT), `companies` (Company, CompanyUser,
-Module, CompanyModule), `catalog`, `sales`, `purchases`, `inventory`,
-`cashbox`, `documents`, `assistant`, `audit`. Ver `docs/ARCHITECTURE.md`
-para el propósito de cada una. Desde `catalog` en adelante siguen vacías
-(sin modelos ni endpoints de negocio) hasta su fase correspondiente.
+Module, CompanyModule), `catalog` (Product), `inventory`
+(InventoryMovement + Tool Layer `ajustar_inventario`), `sales`,
+`purchases`, `cashbox`, `documents`, `assistant`, `audit`. Ver
+`docs/ARCHITECTURE.md` para el propósito de cada una. Desde `sales` en
+adelante siguen vacías hasta su fase correspondiente.
 
 ## Endpoints
 
@@ -46,7 +47,16 @@ para el propósito de cada una. Desde `catalog` en adelante siguen vacías
   queda como `owner`).
 - `GET /api/companies/<id>/` — detalle, solo si el usuario tiene
   membresía activa (404 si no, nunca 403, para no confirmar existencia).
+- `GET/POST /api/products/` — listar/crear productos. `POST` acepta
+  `initial_stock` opcional (siembra el stock inicial vía
+  `ajustar_inventario`). `GET ?low_stock=true` filtra los productos con
+  `current_stock <= low_stock_threshold`.
+- `GET/PATCH/PUT /api/products/<id>/` — detalle/edición. Sin `DELETE`
+  (405): no hay borrado físico, se desactiva con `is_active`.
+- `POST /api/products/<id>/adjust-stock/` — ajuste manual de stock
+  (`{"cantidad": "-3", "motivo": "..."}`); rechaza dejar el stock en
+  negativo (ver `docs/DECISIONS.md` ADR-009).
 
-Los endpoints de negocio (productos, ventas, etc., a partir de Fase 3)
-requerirán además el header `X-Company-Id` con la empresa activa; ver
+Todos los endpoints de negocio (productos y los que vienen en fases
+siguientes) requieren el header `X-Company-Id` con la empresa activa; ver
 `core/tenancy.py`.
