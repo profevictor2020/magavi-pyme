@@ -9,12 +9,26 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
-**Fase 0 — Arquitectura y planificación.** Aún no hay código de
-aplicación. Este repositorio contiene por ahora la documentación de
-diseño que guía la construcción del MVP en fases incrementales y
-verificables.
+**Fase 1 — Estructura del proyecto + Docker + PostgreSQL.** Existe la
+estructura base del backend (Django + DRF, apps de dominio vacías) y del
+frontend (React + Vite), levantables con Docker Compose contra
+PostgreSQL. Todavía no hay modelos de negocio, autenticación ni UI real —
+eso empieza en la Fase 2.
 
 No avanzamos de fase sin que la anterior esté probada y aprobada.
+
+## Cómo levantar el entorno
+
+```
+cp .env.example .env   # y ajustar valores (nunca commitear .env)
+docker compose up --build
+```
+
+- Backend: http://localhost:8000/api/health/
+- Frontend: http://localhost:5173
+
+Ver `backend/README.md` y `frontend/README.md` para desarrollo sin
+Docker.
 
 ## Documentación
 
@@ -48,6 +62,6 @@ No avanzamos de fase sin que la anterior esté probada y aprobada.
 
 ## Cómo contribuir en esta etapa
 
-Por ahora, los cambios relevantes son a la documentación de `docs/`. La
-implementación de código comienza en la Fase 1 del roadmap, tras
-aprobación explícita de la Fase 0.
+Seguimos el roadmap de `docs/ROADMAP.md` fase por fase. Cada fase
+requiere tests en verde, prueba manual documentada y aprobación explícita
+antes de avanzar a la siguiente.
