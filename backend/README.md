@@ -30,11 +30,12 @@ pytest
 `accounts` (usuario custom + JWT), `companies` (Company, CompanyUser,
 Module, CompanyModule), `catalog` (Product), `inventory`
 (InventoryMovement + Tool Layer `ajustar_inventario`), `sales` (Sale,
-SaleItem + Tool Layer `crear_venta`), `cashbox` (CashMovement, escrito
-por `crear_venta`; sin endpoints propios todavía), `audit` (AuditLog
-append-only, escrito por el Tool Layer; sin endpoints todavía),
-`purchases`, `documents`, `assistant`. Ver `docs/ARCHITECTURE.md` para
-el propósito de cada una. Desde `purchases` en adelante siguen vacías
+SaleItem + Tool Layer `crear_venta`), `purchases` (Purchase,
+PurchaseItem + Tool Layer `registrar_compra`), `cashbox` (CashMovement,
+escrito por `crear_venta`/`registrar_compra`; sin endpoints propios
+todavía), `audit` (AuditLog append-only, escrito por el Tool Layer; sin
+endpoints todavía), `documents`, `assistant`. Ver `docs/ARCHITECTURE.md`
+para el propósito de cada una. `documents` y `assistant` siguen vacías
 hasta su fase correspondiente.
 
 ## Endpoints
@@ -68,6 +69,12 @@ hasta su fase correspondiente.
 - `GET /api/sales/summary/` — `{"today": {"total": ..., "count": ...},
   "week": {...}}`, soporte directo a "¿cuánto vendí hoy?" del guion de
   demo.
+- `GET/POST /api/purchases/` — análogo a `/api/sales/`: listar (con
+  filtros `?from=`/`?to=`) / registrar una compra:
+  `{"supplier_name": "...", "items": [{"product_id": 1, "quantity": "20", "unit_cost": "1500.00"}]}`
+  (`unit_cost` opcional, por defecto `Product.default_cost`). Sube stock
+  y registra el egreso de caja (Tool Layer `registrar_compra`).
+- `GET /api/purchases/summary/` — compras/egresos de hoy y de la semana.
 
 Todos los endpoints de negocio requieren el header `X-Company-Id` con la
 empresa activa; ver `core/tenancy.py`.

@@ -9,12 +9,13 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
-**Fase 4 — Ventas.** El Tool Layer `crear_venta` registra una venta,
-descuenta stock (reutilizando `ajustar_inventario` de la Fase 3), genera
-el ingreso de caja correspondiente y una entrada de auditoría — todo en
-una transacción atómica. `GET /api/sales/summary/` ya responde
-"¿cuánto vendí hoy?", el primer pedazo real del guion de demo. Todavía
-no hay compras ni asistente conversacional — eso empieza en la Fase 5.
+**Fase 5 — Compras.** Simétrica a Ventas: el Tool Layer
+`registrar_compra` registra una compra, sube el stock (reutilizando
+`ajustar_inventario`) y genera el egreso de caja correspondiente, todo
+en una transacción atómica. Con Fase 4 + Fase 5, ventas y compras ya
+conviven correctamente sobre el mismo inventario y la misma caja.
+Todavía no hay dashboard ni asistente conversacional — eso viene en la
+Fase 6 en adelante.
 
 No avanzamos de fase sin que la anterior esté probada y aprobada.
 

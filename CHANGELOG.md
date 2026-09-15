@@ -5,6 +5,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 5 — Compras
+
+- Modelos `Purchase`/`PurchaseItem` (`purchases`), simétricos a
+  `Sale`/`SaleItem`.
+- Tool Layer `registrar_compra` (`purchases/services.py`): valida
+  ítems, calcula totales (con `unit_cost` opcional, por defecto
+  `Product.default_cost`), sube stock reutilizando sin cambios
+  `ajustar_inventario`, registra el egreso de caja y una entrada de
+  auditoría, todo en una transacción atómica.
+- Endpoints: `GET/POST /api/purchases/` (con filtros de fecha) y `GET
+  /api/purchases/summary/` (compras de hoy/semana), análogos a ventas.
+- 18 tests nuevos (80 en total): unit del Tool Layer (totales, aumento
+  de stock, movimiento de caja, atomicidad, rechazo de producto de otra
+  empresa) e integración de la API, incluyendo el gate obligatorio de
+  aislamiento multiempresa.
+- Verificado localmente: migraciones desde cero, suite completa en
+  verde, y recorrido manual por HTTP registrando una compra y
+  confirmando que sube el stock y baja la caja — incluyendo una venta y
+  una compra conviviendo sobre el mismo producto sin interferirse.
+- Sin dashboard ni asistente todavía (eso es Fase 6 en adelante).
+
 ### Fase 4 — Ventas
 
 - Modelos `Sale`/`SaleItem` (`sales`), `CashMovement` (`cashbox`) y
