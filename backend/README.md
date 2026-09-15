@@ -31,12 +31,12 @@ pytest
 Module, CompanyModule), `catalog` (Product), `inventory`
 (InventoryMovement + Tool Layer `ajustar_inventario`), `sales` (Sale,
 SaleItem + Tool Layer `crear_venta`), `purchases` (Purchase,
-PurchaseItem + Tool Layer `registrar_compra`), `cashbox` (CashMovement,
-escrito por `crear_venta`/`registrar_compra`; sin endpoints propios
-todavía), `audit` (AuditLog append-only, escrito por el Tool Layer; sin
-endpoints todavía), `documents`, `assistant`. Ver `docs/ARCHITECTURE.md`
-para el propósito de cada una. `documents` y `assistant` siguen vacías
-hasta su fase correspondiente.
+PurchaseItem + Tool Layer `registrar_compra`), `cashbox` (CashMovement +
+Tool Layer de solo lectura `obtener_resumen`, la fuente única de verdad
+del dashboard), `audit` (AuditLog append-only, escrito por el Tool
+Layer; sin endpoints todavía), `documents`, `assistant`. Ver
+`docs/ARCHITECTURE.md` para el propósito de cada una. `documents` y
+`assistant` siguen vacías hasta su fase correspondiente.
 
 ## Endpoints
 
@@ -75,6 +75,13 @@ hasta su fase correspondiente.
   (`unit_cost` opcional, por defecto `Product.default_cost`). Sube stock
   y registra el egreso de caja (Tool Layer `registrar_compra`).
 - `GET /api/purchases/summary/` — compras/egresos de hoy y de la semana.
+- `GET /api/cashbox/summary/` — fuente única de verdad de "cómo va el
+  negocio hoy": `{"cash": {"today": {"income","expense","balance"},
+  "week": {...}}, "sales": {"today": {"total","count"}, "week": {...}},
+  "low_stock_products": [...]}`. Reutiliza `sales`/`catalog` sin
+  duplicar lógica; el asistente (Fase 8) consumirá este mismo Tool Layer
+  (`cashbox/services.py::obtener_resumen`) directamente, sin pasar por
+  HTTP.
 
 Todos los endpoints de negocio requieren el header `X-Company-Id` con la
 empresa activa; ver `core/tenancy.py`.

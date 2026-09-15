@@ -3,13 +3,13 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from catalog.models import Product
+from core.dates import today_and_week_start
 from core.tenancy import get_current_company
 
 from .models import Purchase
@@ -68,9 +68,7 @@ class PurchaseSummaryView(APIView):
 
     def get(self, request):
         company = get_current_company(request)
-        now = timezone.localtime()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        week_start = today_start - timezone.timedelta(days=today_start.weekday())
+        today_start, week_start = today_and_week_start()
 
         base = Purchase.objects.for_company(company).filter(status=Purchase.Status.CONFIRMED)
 

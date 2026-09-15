@@ -9,13 +9,14 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
-**Fase 5 — Compras.** Simétrica a Ventas: el Tool Layer
-`registrar_compra` registra una compra, sube el stock (reutilizando
-`ajustar_inventario`) y genera el egreso de caja correspondiente, todo
-en una transacción atómica. Con Fase 4 + Fase 5, ventas y compras ya
-conviven correctamente sobre el mismo inventario y la misma caja.
-Todavía no hay dashboard ni asistente conversacional — eso viene en la
-Fase 6 en adelante.
+**Fase 6 — Caja y dashboard/resumen.** `GET /api/cashbox/summary/` es
+ahora la fuente única de verdad de "cómo va el negocio hoy" (caja,
+ventas y stock bajo, hoy y esta semana), reutilizando sin duplicar la
+lógica de `sales`/`catalog`/`cashbox` ya construida. La vista visual de
+dashboard en el frontend se difiere deliberadamente a la Fase 10 (ver
+`docs/ROADMAP.md` Fase 6), para no construir pantallas con
+login/selección de empresa antes de tiempo y tener que rehacerlas.
+Todavía no hay asistente conversacional — eso empieza en la Fase 7.
 
 No avanzamos de fase sin que la anterior esté probada y aprobada.
 

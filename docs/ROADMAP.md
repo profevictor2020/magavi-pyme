@@ -169,17 +169,29 @@ baja la caja.
 ## Fase 6 — Caja y dashboard/resumen
 
 **Construir:**
-- Endpoint de resumen: caja del día/semana, ventas del día/semana,
-  productos con stock bajo — la data que alimentará tanto el dashboard
-  tradicional como las respuestas del asistente.
-- Vista simple de dashboard en el frontend.
+- Endpoint de resumen (`GET /api/cashbox/summary/`): caja del día/semana
+  (ingreso, egreso, balance), ventas del día/semana, productos con stock
+  bajo — la data que alimentará tanto el dashboard tradicional como las
+  respuestas del asistente. Implementado como Tool Layer de solo lectura
+  (`cashbox/services.py::obtener_resumen`), no solo como vista.
 
-**No construir:** gráficos avanzados, comparativas históricas, exportables.
+**Ajuste de alcance respecto al plan original (decisión explícita, no
+omisión):** se difiere la "vista simple de dashboard en el frontend" a
+la Fase 10. Construirla ahora requeriría adelantar login/selección de
+empresa en el frontend (que hoy no existen) solo para esta pantalla,
+trabajo que se descartaría/reharía al construir la UX final. La Fase 10
+ya reúne todas las pantallas (incluida esta) con auth real desde el
+principio, evitando ese descarte. El endpoint —la parte arquitectónicamente
+importante, reutilizada luego por el asistente— sí se construye completo
+en esta fase.
+
+**No construir:** gráficos avanzados, comparativas históricas,
+exportables, vista de frontend (ver ajuste de alcance arriba).
 
 **Tests automáticos:** unit sobre los cálculos de agregación (totales por
-período, timezone correcto — importante para "hoy" en Chile).
-Integration del endpoint de resumen con datos de más de una empresa
-(aislamiento).
+período, timezone correcto — importante para "hoy" en Chile, incluye caso
+explícito de un movimiento cerca de medianoche local). Integration del
+endpoint de resumen con datos de más de una empresa (aislamiento).
 
 **Prueba manual:** verificar que el resumen coincide con los datos
 cargados en fases anteriores.

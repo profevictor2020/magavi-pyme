@@ -5,6 +5,34 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 6 — Caja y dashboard/resumen
+
+- Tool Layer de solo lectura `obtener_resumen` (`cashbox/services.py`):
+  fuente única de verdad de "cómo va el negocio hoy" — caja
+  (ingreso/egreso/balance), ventas, y productos con stock bajo, para
+  hoy y para la semana. Reutiliza `Sale`/`CashMovement`/`Product` sin
+  duplicar lógica de negocio.
+- Endpoint `GET /api/cashbox/summary/`.
+- Refactor: se extrajo `core/dates.py::today_and_week_start()` (límites
+  de "hoy"/"esta semana" en hora de Chile) para eliminar la duplicación
+  que ya existía entre `sales` y `purchases`, y que ahora también usa
+  `cashbox`.
+- **Ajuste de alcance documentado** (`docs/ROADMAP.md` Fase 6): se
+  difiere la vista de dashboard del frontend a la Fase 10, para no
+  construir pantallas con login/selección de empresa (que no existen
+  todavía) antes de tiempo y tener que rehacerlas.
+- 11 tests nuevos (91 en total): unit de los cálculos de agregación,
+  incluyendo un caso explícito de un movimiento a las 23:30 hora de
+  Chile para verificar que los límites de "hoy" usan la zona horaria
+  local y no UTC; integración del endpoint con el gate obligatorio de
+  aislamiento multiempresa.
+- Verificado localmente: sin cambios de esquema (`makemigrations
+  --check` limpio), suite completa en verde, y recorrido manual por
+  HTTP cargando productos/ventas/compras y confirmando que el resumen
+  coincide exactamente con `/api/sales/summary/` y
+  `/api/purchases/summary/`.
+- Sin asistente conversacional todavía (eso es Fase 7 en adelante).
+
 ### Fase 5 — Compras
 
 - Modelos `Purchase`/`PurchaseItem` (`purchases`), simétricos a
