@@ -1,0 +1,26 @@
+# Entornos y secretos
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Media subido por usuarios (documentos, imágenes)
+media/
+
+# Logs
+*.log
