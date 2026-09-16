@@ -5,6 +5,52 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 12 — Demo MVP
+
+Fase de integración y validación (sin funcionalidad nueva, ver
+`docs/ROADMAP.md`): confirma que el guion de demo completo del MVP
+funciona de punta a punta.
+
+- `backend/scripts/e2e_fake_llm.py`: stub HTTP determinístico que habla
+  el mismo protocolo que Ollama (compatible con OpenAI), usado SOLO por
+  el job de CI `e2e` — distingue el prompt del asistente conversacional
+  del prompt de estructuración de documentos, y resuelve `product_id`
+  leyendo el catálogo que el propio backend incluye en cada prompt (no
+  asume ids fijos, porque no son predecibles en una corrida de punta a
+  punta).
+- `docker-compose.e2e.yml`: override que reemplaza el LLM de producción
+  (perfil `llm`, apagado por defecto) por el stub anterior — nunca se
+  usa en `docker compose up` normal ni en producción.
+- `frontend/e2e/demo.spec.ts` (Playwright + `@playwright/test`, viewport
+  móvil `Pixel 7`): dos tests. El primero cubre los 7 pasos del guion de
+  demo (`docs/ROADMAP.md` Fase 12: iniciar sesión → "¿cuánto vendí hoy?"
+  → "Vendí 3 cafés a 2500" → confirmar → caja/inventario actualizados →
+  volver a preguntar y ver el cambio → fotografiar una factura → revisar
+  → confirmar → inventario actualizado). El segundo prueba el punto 8
+  (aislamiento): una empresa nueva en paralelo nunca ve los datos de la
+  primera.
+- Nuevo job `e2e` en CI (`.github/workflows/ci.yml`): levanta el stack
+  completo real (`docker-compose.yml` + `docker-compose.e2e.yml`),
+  instala Chromium (`playwright install --with-deps`) y corre el guion
+  contra la app real — no contra mocks. Sube el reporte HTML de
+  Playwright como artefacto si algo falla.
+- Verificado además a mano (no solo el test automático): se corrió el
+  mismo recorrido completo contra el stack real (Postgres, Redis,
+  Celery, Tesseract, el LLM de prueba) con capturas de pantalla de cada
+  paso, incluyendo la verificación en vivo de que una segunda empresa
+  ("Ferretería Pedro") nunca ve nada de la primera ("Almacén Marcela").
+- **Bug real encontrado y corregido en el propio script de verificación
+  manual** (no en la app): el sufijo usado para generar un RUT único
+  por corrida tomaba los primeros dígitos de `Date.now()`, que casi no
+  cambian entre corridas separadas por minutos — dos ejecuciones
+  cercanas en el tiempo generaban el mismo RUT y la creación de la
+  segunda empresa fallaba con "Ya existe company con este rut." Se
+  corrigió usando los últimos dígitos (más volátiles). El mismo bug
+  existía en `frontend/e2e/demo.spec.ts` y se corrigió ahí también antes
+  de que llegara a CI.
+- Con esto, las Fases 0–12 del roadmap original del MVP quedan
+  completas.
+
 ### Fase 11 — Seguridad, auditoría y pruebas integrales
 
 - **Dependencias actualizadas** tras un escaneo con `pip-audit` que

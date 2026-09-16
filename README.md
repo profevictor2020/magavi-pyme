@@ -9,6 +9,21 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
+**Fase 12 — Demo MVP.** Fase de integración y validación, sin
+funcionalidad nueva: el guion de demo completo (abrir MAGAVI desde un
+celular → iniciar sesión → "¿cuánto vendí hoy?" → "Vendí 3 cafés a
+$2.500" → confirmar → inventario/caja actualizados → volver a preguntar
+"¿cuánto vendí hoy?" y ver el cambio → fotografiar una boleta de compra
+→ revisar → confirmar → inventario actualizado, todo con una segunda
+empresa en paralelo sin ningún dato cruzado) ahora tiene un test E2E
+real (Playwright, viewport móvil) que lo corre de punta a punta contra
+el stack completo — backend, worker de Celery, Redis, OCR real con
+Tesseract y un LLM de prueba determinístico (`backend/scripts/
+e2e_fake_llm.py`, habla el mismo protocolo que Ollama) — en su propio
+job de CI (`e2e`). Se ejecutó además a mano, con capturas de pantalla
+de cada paso del guion. **Con esto, las Fases 0–12 del roadmap original
+quedan completas.**
+
 **Fase 11 — Seguridad, auditoría y pruebas integrales.** Endurecimiento
 de seguridad de punta a punta: rate limiting real (login/asistente/
 documentos, separado también por empresa activa, no solo por usuario),

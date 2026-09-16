@@ -108,3 +108,66 @@ jobs:
       - name: Apagar stack
         if: always()
         run: docker compose down -v
+
+  # Guion de demo completo (ver docs/ROADMAP.md Fase 12): levanta el
+  # stack real (igual que el job `compose`, más un LLM de prueba
+  # determinístico — ver docker-compose.e2e.yml y
+  # backend/scripts/e2e_fake_llm.py) y corre el recorrido completo con
+  # Playwright en viewport móvil contra la app real, no mocks.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar .env
+        run: cp .env.example .env
+      - name: Levantar stack completo + LLM de prueba (docker compose up)
+        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d
+      - name: Esperar y verificar backend (/api/health/)
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/api/health/; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "El backend no respondio 200 en /api/health/" >&2
+          docker compose logs
+          exit 1
+      - name: Esperar frontend (servidor Vite responde)
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "El frontend no respondio en :5173" >&2
+          docker compose logs
+          exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - name: Instalar navegador de Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Correr el guion de demo (Playwright, viewport móvil)
+        working-directory: frontend
+        run: npx playwright test
+      - name: Subir reporte de Playwright (si algo falló)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+      - name: Logs (siempre, para diagnostico)
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs
+      - name: Apagar stack
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml down -v

@@ -1,0 +1,36 @@
+# Override SOLO para el job de CI "e2e" (ver docs/ROADMAP.md Fase 12):
+# uso: docker compose -f docker-compose.yml -f docker-compose.e2e.yml up
+#
+# Reemplaza el LLM de producción/self-hosted (perfil "llm", apagado por
+# defecto y que requiere cómputo real) por un stub HTTP determinístico
+# (backend/scripts/e2e_fake_llm.py) que habla el mismo protocolo que
+# Ollama, para poder correr el guion de demo completo (incluyendo el
+# asistente conversacional y la estructuración de documentos) en un
+# runner de CI sin GPU ni red externa. Nunca se usa en `docker compose up`
+# normal ni en producción.
+services:
+  fake-llm:
+    image: python:3.12-slim
+    volumes:
+      - ./backend/scripts:/scripts:ro
+    command: python /scripts/e2e_fake_llm.py
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 11434), timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  backend:
+    environment:
+      LLM_OLLAMA_BASE_URL: http://fake-llm:11434
+    depends_on:
+      fake-llm:
+        condition: service_healthy
+
+  worker:
+    environment:
+      LLM_OLLAMA_BASE_URL: http://fake-llm:11434
+    depends_on:
+      fake-llm:
+        condition: service_healthy
