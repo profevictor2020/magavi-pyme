@@ -10,11 +10,25 @@ from sales.models import Sale
 
 from .llm_providers import FakeLLMProvider
 from .models import Conversation, Message, PendingAction
-from .orchestrator import interpretar_y_proponer
+from .orchestrator import _construir_contexto_catalogo, interpretar_y_proponer
 
 
 def _json(intent, parameters=None):
     return json.dumps({"intent": intent, "parameters": parameters or {}})
+
+
+class ConstruirContextoCatalogoTests(TestCase):
+    """El stock actual tiene que ir en el contexto que se le manda al LLM
+    (ver SYSTEM_PROMPT): sin eso, el modelo no puede calcular un delta
+    cuando el usuario da un valor final/absoluto en vez de un cambio."""
+
+    def test_incluye_stock_actual_de_cada_producto(self):
+        company = CompanyFactory()
+        ProductFactory(company=company, name="Café", current_stock=Decimal("10"))
+
+        contexto = _construir_contexto_catalogo(company)
+
+        self.assertIn("stock actual: 10", contexto)
 
 
 class InterpretarYProponerTests(TestCase):

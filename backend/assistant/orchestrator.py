@@ -41,7 +41,14 @@ Intents disponibles:
 - registrar_compra: {"items": [{"product_id": <int>, "quantity": "<numero>", \
 "unit_cost": "<numero opcional>"}], "supplier_name": "<opcional>"}
 - ajustar_inventario: {"product_id": <int>, "cantidad": "<numero con signo>", \
-"motivo": "<texto>"}
+"motivo": "<texto>"}. "cantidad" es SIEMPRE el cambio (delta), nunca el \
+valor final. Si el usuario da un valor final/absoluto ("quedan 60", "hay \
+60 unidades", "el stock es 60"), calcula tú el delta usando el stock \
+actual que aparece en el catálogo (delta = valor final - stock actual) — \
+no se lo pidas al usuario. Si el usuario no da un motivo explícito, \
+infiere uno breve y razonable a partir de su mensaje (p.ej. "llegada de \
+mercadería", "merma", "conteo físico") — nunca dejes "motivo" vacío ni \
+le exijas al usuario decir literalmente la palabra "motivo".
 - crear_producto: {"name": "<texto>", "unit": "<unidad|kg|lt, opcional>", \
 "default_price": "<numero opcional>", "default_cost": "<numero opcional>", \
 "initial_stock": "<numero opcional>"}
@@ -67,13 +74,19 @@ nunca tú."""
 
 
 def _construir_contexto_catalogo(company) -> str:
+    """Incluye el stock actual de cada producto (no solo su id/nombre): es
+    lo que le permite al modelo calcular un delta cuando el usuario da un
+    valor final/absoluto en vez de un cambio (ver SYSTEM_PROMPT,
+    ajustar_inventario) — "grounding" del LLM contra el estado real, no
+    hacerlo adivinar a ciegas.
+    """
     productos = list(
         Product.objects.for_company(company).filter(is_active=True).order_by("name")[:200]
     )
     if not productos:
         return "Catálogo de la empresa: (sin productos registrados todavía)."
-    lineas = [f"- product_id={p.id}: {p.name}" for p in productos]
-    return "Catálogo de la empresa (product_id: nombre):\n" + "\n".join(lineas)
+    lineas = [f"- product_id={p.id}: {p.name} (stock actual: {p.current_stock})" for p in productos]
+    return "Catálogo de la empresa (product_id: nombre, stock actual):\n" + "\n".join(lineas)
 
 
 def _pedir_intent_al_llm(llm_provider, messages):

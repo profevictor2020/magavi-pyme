@@ -5,6 +5,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### El asistente ahora razona con el stock real (grounding)
+
+El contexto de catálogo que se le manda al LLM (`assistant/orchestrator.py`)
+ahora incluye el stock actual de cada producto, no solo su id y nombre.
+Antes, un mensaje con un valor final ("hay 60 unidades", "quedan 60")
+no se podía interpretar: `ajustar_inventario` espera un delta con signo,
+y el modelo no tenía cómo calcularlo sin saber el stock actual. Con el
+stock en el contexto, el propio modelo calcula el delta (`SYSTEM_PROMPT`
+se lo indica explícitamente) e infiere un motivo razonable si el usuario
+no lo da — sin agregar ningún campo/patrón rígido nuevo al `IntentSchema`.
+La confirmación humana antes de ejecutar sigue siendo el control real de
+seguridad (el usuario ve el delta calculado y puede cancelar si está
+mal), no un parche temporal — ver la conversación en torno a esta
+decisión para las referencias de literatura consultadas (grounding de
+LLMs, texto-a-acción sobre bases de datos, confirmación humano-en-el-loop
+en function calling).
+
+De paso: `backend/scripts/e2e_fake_llm.py` (el stub del job de CI `e2e`)
+ajustó su regex de extracción del catálogo, que asumía que el nombre del
+producto era todo el resto de la línea — ahora corta antes del nuevo
+sufijo `(stock actual: ...)`.
+
 ### Nuevo intent del asistente: crear productos por chat
 
 - `catalog/services.py`: nueva función de Tool Layer `crear_producto`

@@ -35,9 +35,12 @@ def _normalize(text: str) -> str:
 
 
 def _extraer_catalogo(system_text: str) -> list[tuple[int, str]]:
+    # El nombre corta antes de "(stock actual: ...)" — ver
+    # assistant/orchestrator.py::_construir_contexto_catalogo, que ahora
+    # incluye el stock real de cada producto en esa misma línea.
     return [
         (int(product_id), name.strip())
-        for product_id, name in re.findall(r"product_id=(\d+): ([^\n]+)", system_text)
+        for product_id, name in re.findall(r"product_id=(\d+): ([^\n(]+)", system_text)
     ]
 
 
