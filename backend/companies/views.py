@@ -2,6 +2,8 @@ from django.db import transaction
 from rest_framework import generics, permissions
 from rest_framework.exceptions import NotFound
 
+from audit.services import registrar_auditoria
+
 from .models import Company, CompanyUser
 from .serializers import CompanySerializer
 
@@ -26,6 +28,14 @@ class CompanyListCreateView(generics.ListCreateAPIView):
             company = serializer.save()
             CompanyUser.objects.create(
                 company=company, user=self.request.user, role=CompanyUser.Role.OWNER
+            )
+            registrar_auditoria(
+                company=company,
+                user=self.request.user,
+                action="company.create",
+                entity_type="Company",
+                entity_id=company.id,
+                after={"name": company.name, "rut": company.rut},
             )
 
 

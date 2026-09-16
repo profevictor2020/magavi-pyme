@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from audit.services import audit_source_for_origen, registrar_auditoria
 from catalog.models import Product
 
 from .models import InventoryMovement
@@ -62,5 +63,20 @@ def ajustar_inventario(
 
         locked_product.current_stock = nuevo_stock
         locked_product.save(update_fields=["current_stock", "updated_at"])
+
+        registrar_auditoria(
+            company=company,
+            user=user,
+            action="inventory.adjust",
+            entity_type="InventoryMovement",
+            entity_id=movement.id,
+            after={
+                "product_id": locked_product.id,
+                "cantidad": str(cantidad),
+                "balance_after": str(nuevo_stock),
+                "motivo": motivo,
+            },
+            source=audit_source_for_origen(origen),
+        )
 
     return movement

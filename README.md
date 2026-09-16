@@ -9,6 +9,27 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
+**Fase 11 — Seguridad, auditoría y pruebas integrales.** Endurecimiento
+de seguridad de punta a punta: rate limiting real (login/asistente/
+documentos, separado también por empresa activa, no solo por usuario),
+`AuditLog` ahora instrumentado en todos los flujos de escritura
+relevantes (ventas, compras, ajustes de inventario, confirmación/rechazo
+de documentos, login/logout/registro, creación de empresa) en vez de
+solo tener el modelo sin usar, cabeceras de seguridad de producción
+(HSTS, cookies seguras, redirect a HTTPS) activas automáticamente fuera
+de modo debug, y dependencias actualizadas a versiones sin
+vulnerabilidades conocidas (Django, DRF, simplejwt, Pillow) con
+`pip-audit`/`npm audit` bloqueando CI de ahí en adelante. De paso se
+corrigió una condición de carrera real: confirmar el mismo documento dos
+veces (doble tap, reintento de red) podía registrar la compra/venta dos
+veces — ahora está serializado con bloqueo de fila. Se ejecutó a mano un
+checklist de seguridad completo (login roto, acceso cruzado por id,
+subida de archivo inválida, intento de prompt injection contra un LLM
+adversarial de prueba) — ver `docs/SECURITY.md` §14 para el detalle y
+resultado de cada caso: ningún hallazgo crítico abierto. PostgreSQL Row
+Level Security queda documentado como mejora diferida, no bloqueante
+(`docs/DECISIONS.md` ADR-013).
+
 **Fase 10 — PWA mobile-first y UX final.** El frontend dejó de ser un
 placeholder: ahora es una PWA instalable, de una sola columna, con el
 **chat como pantalla principal** (`ChatPage`) — enviar un mensaje como

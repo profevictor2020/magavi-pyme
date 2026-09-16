@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from audit.services import registrar_auditoria
+from audit.services import audit_source_for_origen, registrar_auditoria
 from cashbox.models import CashMovement
 from inventory.services import ajustar_inventario
 
@@ -90,6 +90,7 @@ def registrar_compra(*, company, user, items, origen="manual", supplier_name="")
             entity_type="Purchase",
             entity_id=purchase.id,
             after={"total": str(total), "items": len(purchase_items)},
+            source=audit_source_for_origen(origen),
         )
 
     return purchase

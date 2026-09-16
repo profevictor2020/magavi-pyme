@@ -157,6 +157,15 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    # Rate limiting (ver docs/SECURITY.md #9): solo en las superficies con
+    # riesgo real de abuso (fuerza bruta en auth, costo de inferencia en
+    # el asistente y en el pipeline de documentos) — no un límite global
+    # que pueda romper uso legítimo del resto de la API.
+    "DEFAULT_THROTTLE_RATES": {
+        "auth": "10/min",
+        "assistant": "30/min",
+        "documents": "20/min",
+    },
 }
 
 SIMPLE_JWT = {
@@ -201,3 +210,21 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+
+# Cabeceras de transporte/seguridad (ver docs/SECURITY.md #11). Todo esto
+# se activa solo cuando DEBUG=False: en dev y en CI (donde DJANGO_DEBUG
+# no se define y por lo tanto DEBUG queda en True, ver env_bool arriba)
+# se mantiene desactivado a propósito — SECURE_SSL_REDIRECT=True sin TLS
+# real (como en el cliente de pruebas o en `docker compose` sin nginx
+# delante) redirigiría toda request y rompería la app entera, no solo
+# los tests. En producción, TLS lo termina NGINX (docs/ARCHITECTURE.md
+# #3.8) delante de este backend.
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+# X-Content-Type-Options, Referrer-Policy y X-Frame-Options ya vienen de
+# los defaults de Django (SecurityMiddleware/XFrameOptionsMiddleware,
+# ambos instalados arriba) — no hace falta repetirlos aquí.

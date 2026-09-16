@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Sum
 
-from audit.services import registrar_auditoria
+from audit.services import audit_source_for_origen, registrar_auditoria
 from cashbox.models import CashMovement
 from core.dates import today_and_week_start
 from inventory.services import ajustar_inventario
@@ -92,6 +92,7 @@ def crear_venta(*, company, user, items, origen="manual", customer_name=""):
             entity_type="Sale",
             entity_id=sale.id,
             after={"total": str(total), "items": len(sale_items)},
+            source=audit_source_for_origen(origen),
         )
 
     return sale

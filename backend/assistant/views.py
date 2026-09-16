@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 
 from catalog.serializers import InventoryMovementSerializer
 from core.tenancy import get_current_company
+from core.throttling import CompanyScopedRateThrottle
 from inventory.models import InventoryMovement
 from purchases.models import Purchase
 from purchases.serializers import PurchaseSerializer
@@ -93,6 +94,9 @@ class IntentProposeView(APIView):
     confirmación en vez de ejecutarla (ver docs/ARCHITECTURE.md #3.4).
     """
 
+    throttle_classes = [CompanyScopedRateThrottle]
+    throttle_scope = "assistant"
+
     def post(self, request):
         company = get_current_company(request)
         envelope = IntentEnvelopeSerializer(data=request.data)
@@ -131,6 +135,9 @@ class IntentProposeView(APIView):
 
 
 class IntentConfirmView(APIView):
+    throttle_classes = [CompanyScopedRateThrottle]
+    throttle_scope = "assistant"
+
     def post(self, request, pending_action_id):
         company = get_current_company(request)
         try:
@@ -152,6 +159,9 @@ class ChatView(APIView):
     — toda mutación sigue requiriendo confirmación explícita, el LLM
     nunca ejecuta nada directamente.
     """
+
+    throttle_classes = [CompanyScopedRateThrottle]
+    throttle_scope = "assistant"
 
     def post(self, request):
         company = get_current_company(request)

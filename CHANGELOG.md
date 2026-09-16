@@ -5,6 +5,84 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 11 — Seguridad, auditoría y pruebas integrales
+
+- **Dependencias actualizadas** tras un escaneo con `pip-audit` que
+  encontró 50 vulnerabilidades conocidas en 5 paquetes: Django
+  (`5.0.14` → `5.2.17`), `djangorestframework` (`3.15.2` → `3.17.2`),
+  `djangorestframework-simplejwt` (`5.3.1` → `5.5.1`), Pillow (`10.4.0`
+  → `12.3.0`) y pytest (`8.4.2` → `9.1.1`, dev). Se eliminó
+  `python-dotenv` de `requirements.txt` (dependencia sin ningún uso real
+  en el código, y también vulnerable). Suite completa (159 tests) verde
+  después de la actualización, sin cambios de comportamiento.
+- **Rate limiting real** (`core/throttling.py::CompanyScopedRateThrottle`,
+  variante de `ScopedRateThrottle` que separa el cupo también por
+  empresa activa vía `X-Company-Id`, no solo por usuario/IP): scope
+  `auth` (login/registro/refresh/logout, 10/min) en nuevas
+  `LoginView`/`LogoutView`/`RefreshView` (`accounts/views.py`), scope
+  `assistant` (chat/proponer/confirmar intent, 30/min), scope
+  `documents` (solo la subida, 20/min, ver `documents/views.py`).
+  `conftest.py` nuevo: limpia el cache antes/después de cada test para
+  que los contadores de throttle no se filtren entre tests.
+- **`AuditLog` instrumentado de verdad** (antes el modelo existía pero
+  solo `sale.create`/`purchase.create` lo usaban, y siempre con
+  `source="api"` sin importar el origen real): nuevo
+  `audit_source_for_origen()` (`audit/services.py`) mapea el `origen`
+  interno del Tool Layer (`manual`/`assistant`/`document`) al
+  vocabulario de `AuditLog.source` (`ui`/`assistant`/`document`);
+  `ajustar_inventario` ahora audita `inventory.adjust` (cubre el ajuste
+  manual y cada movimiento disparado por una venta/compra);
+  `DocumentConfirmView`/`DocumentRejectView` auditan
+  `document.confirm`/`document.reject`; `CompanyListCreateView` audita
+  `company.create`; nuevas `LoginView`/`LogoutView` y `RegisterView`
+  auditan `auth.login`/`auth.logout`/`auth.register`. El admin de
+  `AuditLog` ahora tampoco permite agregar entradas a mano (ya no
+  permitía editar/borrar).
+- **Bug real corregido: condición de carrera en `DocumentConfirmView`**
+  (ver docs/SECURITY.md #8) — confirmar el mismo documento dos veces
+  simultáneamente (doble tap, reintento de red) podía pasar el chequeo
+  de "ya confirmado" en ambas antes de que cualquiera alcanzara a
+  actualizar el estado, registrando dos compras/ventas por un solo
+  documento. Corregido envolviendo el chequeo + ejecución + cambio de
+  estado en `transaction.atomic()` + `select_for_update()` sobre la fila
+  del documento — la segunda confirmación ahora espera a la primera y
+  ve el estado ya actualizado. Se preservó cuidadosamente el orden
+  "verificar dueño del recurso antes que validar el body" (un test de
+  aislamiento existente detectó una regresión propia en el primer
+  intento de este fix, donde un documento ajeno con un body inválido
+  devolvía 400 en vez de 404).
+- **Cabeceras de seguridad de producción**: `SECURE_SSL_REDIRECT`,
+  `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`,
+  `SECURE_HSTS_SECONDS`/`INCLUDE_SUBDOMAINS`/`PRELOAD`, todas activadas
+  automáticamente solo cuando `DJANGO_DEBUG=false` (nunca en dev/CI, que
+  corren con `DEBUG=True` — evita romper el cliente de tests o
+  `docker compose` sin TLS real delante). Verificado con
+  `python manage.py check --deploy` (0 hallazgos).
+- **Escaneo de dependencias en CI**: `pip-audit` (backend) y
+  `npm audit --audit-level=moderate` (frontend) corren en cada push y
+  **bloquean el pipeline** ante una vulnerabilidad conocida — antes no
+  corrían en absoluto pese a estar documentados desde la Fase 0.
+- **Batería de seguridad consolidada** (`core/test_security.py`, 13
+  tests nuevos): acceso anónimo rechazado en los endpoints de negocio,
+  `X-Company-Id` obligatorio, rate limiting end-to-end (la request 11 a
+  `/api/auth/login/` responde 429), y un test por flujo de escritura
+  verificando que efectivamente queda su `AuditLog` con el `source`
+  correcto.
+- **Checklist manual de seguridad ejecutado y documentado**
+  (`docs/SECURITY.md` #14): login roto (password incorrecta, intento de
+  inyección SQL en el email, mensaje de error idéntico entre usuario
+  inexistente y password incorrecta), acceso cruzado por id en tres
+  variantes (IDOR), subida de archivo inválida en dos variantes, e
+  intento de prompt injection contra un LLM adversarial de prueba que
+  intentaba auto-marcarse como "ya confirmado" — el backend ignoró por
+  completo esos campos falsos y exigió la confirmación humana normal.
+  Ningún hallazgo crítico abierto.
+- **PostgreSQL Row Level Security: diferido explícitamente**, no
+  implementado esta fase — ver `docs/DECISIONS.md` ADR-013 para el
+  análisis de costo/riesgo y las condiciones bajo las que se revisitaría.
+- Suite final: 172 tests (159 + 13 nuevos), `ruff check .` limpio,
+  `pip-audit`/`npm audit` sin hallazgos.
+
 ### Fase 10 — PWA mobile-first y UX final
 
 - Frontend real (antes solo el placeholder de la Fase 1): SPA con

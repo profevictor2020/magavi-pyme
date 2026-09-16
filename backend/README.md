@@ -167,3 +167,24 @@ empresa activa; ver `core/tenancy.py`.
   `docker-compose.yml`). En tests/CI se usa
   `CELERY_TASK_ALWAYS_EAGER=true` para que la tarea corra de forma
   síncrona en el mismo proceso, sin necesitar un broker real.
+
+## Seguridad, rate limiting y auditoría (ver `docs/SECURITY.md`)
+
+- Rate limiting (`core/throttling.py::CompanyScopedRateThrottle`, separa
+  el cupo también por empresa activa) en tres scopes configurados en
+  `DEFAULT_THROTTLE_RATES`: `auth` (login/registro/refresh/logout,
+  10/min), `assistant` (chat/intents, 30/min), `documents` (solo la
+  subida, 20/min).
+- `AuditLog` (`audit/` — solo lectura desde el admin, sin endpoints de
+  escritura) se instrumenta en el Tool Layer (`crear_venta`,
+  `registrar_compra`, `ajustar_inventario`) y en las vistas de
+  auth/empresa/documentos — ver `docs/SECURITY.md` #10 para el detalle
+  completo de qué se audita.
+- `core/test_security.py` es la batería de seguridad consolidada:
+  acceso anónimo rechazado, `X-Company-Id` obligatorio, rate limiting
+  end-to-end, y que cada flujo de escritura relevante deja su
+  `AuditLog`.
+- `python manage.py check --deploy` se usa para validar la
+  configuración de cabeceras/transporte de producción
+  (`SECURE_SSL_REDIRECT`, HSTS, cookies seguras — todo gateado por
+  `DJANGO_DEBUG=false`, sin efecto en dev/CI).

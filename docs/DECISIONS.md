@@ -421,3 +421,56 @@ ninguna decisión de este ADR que sea difícil de revertir después si se
 justifica (p. ej. migrar a `vite-plugin-pwa` si el Service Worker a mano
 se vuelve difícil de mantener, o a cookies `httpOnly` si se necesita
 mayor garantía contra XSS).
+
+---
+
+## ADR-013 — PostgreSQL Row Level Security: diferido, no bloqueante
+para el MVP
+
+**Contexto:** `docs/SECURITY.md` #4 y `docs/ROADMAP.md` Fase 11 listan
+PostgreSQL Row Level Security (RLS) como una segunda capa de aislamiento
+multiempresa "opcional (evaluar según tiempo)", independiente de bugs de
+aplicación: hoy el aislamiento depende enteramente de que
+`CompanyScopedManager`/`get_current_company` se usen correctamente en
+cada vista y cada Tool Layer (defensa en una sola capa de código, aunque
+con tests de aislamiento obligatorios en cada fase desde la Fase 2).
+
+**Decisión:** no implementar RLS en esta fase. Se evaluó el esfuerzo
+real: requeriría (a) una política RLS por tabla de negocio
+(`CREATE POLICY ... USING (company_id = current_setting('app.company_id')::int)`),
+(b) que cada conexión de Django fije `app.company_id` vía
+`SET LOCAL` al inicio de cada request (un middleware o decorator nuevo,
+ya que Django no gestiona esto nativamente), (c) verificar que
+`psycopg`/el pool de conexiones no reutilice conexiones entre requests
+de distintas empresas sin resetear ese valor, y (d) migrar el rol de la
+aplicación a uno sin `BYPASSRLS` (el rol por defecto de un superusuario
+de desarrollo lo tiene). Ninguno de estos puntos es trivial de hacer
+bien, y un RLS mal configurado (p. ej. una política que se olvida en una
+tabla nueva) da una falsa sensación de seguridad — potencialmente peor
+que no tenerlo, si se asume que "ya está cubierto por RLS" y se relaja
+la disciplina de tests de aislamiento por app.
+
+**Por qué esto no debilita la postura de seguridad del MVP:** el
+aislamiento por aplicación ya tiene defensa en profundidad real, no una
+sola capa: `CompanyScopedManager` falla cerrado (lanza excepción) ante
+cualquier query sin `.for_company()`, en vez de devolver todo el dataset
+(ver `core/managers.py`); cada fase que agrega un modelo/endpoint nuevo
+tiene como gate obligatorio un test de aislamiento cruzado (crear 2
+empresas, verificar 404 en listado y en acceso directo por id); y la
+Fase 11 sumó una batería consolidada (`core/test_security.py`) que
+prueba esto de forma transversal. RLS agregaría una capa extra ante un
+bug de aplicación que ningún test detectó — un escenario real pero de
+probabilidad baja dado lo anterior, no el vector de riesgo dominante
+para un MVP con un puñado de empresas piloto.
+
+**Alternativas consideradas:** implementarlo ahora de todos modos (se
+descartó por el costo/riesgo de una implementación apurada, ver arriba);
+no mencionarlo en absoluto (se descartó — mejor documentar la decisión
+explícitamente que dejarlo como un olvido silencioso).
+
+**Consecuencias:** queda como mejora de hardening documentada, no como
+bloqueante. Se revisita si: el número de tablas/empresas crece lo
+suficiente como para justificar la inversión, se contrata una auditoría
+de seguridad externa que lo pida explícitamente, o se detecta en
+producción un bug de aislamiento que RLS hubiera prevenido (en cuyo
+caso, además de corregir el bug puntual, se prioriza RLS de inmediato).
