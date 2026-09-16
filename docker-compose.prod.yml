@@ -1,0 +1,118 @@
+# Despliegue de producción en una sola VM (ver docs/DEPLOY.md), pensado
+# para el tier "Always Free" de Oracle Cloud (docs/DECISIONS.md ADR-014).
+#
+# A diferencia de docker-compose.e2e.yml (que sí se combina con
+# docker-compose.yml vía -f), este archivo es AUTOCONTENIDO — no se
+# combina con docker-compose.yml — porque casi todos los servicios
+# cambian de forma no trivial (build de producción sin bind mounts de
+# código fuente, sin puertos internos publicados al host, frontend
+# servido por NGINX en vez del servidor de desarrollo de Vite).
+#
+# Uso (ver docs/DEPLOY.md para la guía completa):
+#   cp .env.prod.example .env.prod   # y editar con valores reales
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod --profile llm up --build -d
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod exec llm-inference ollama pull "$LLM_OLLAMA_MODEL"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-magavi}
+      POSTGRES_USER: ${POSTGRES_USER:-magavi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-magavi}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Sin "ports": solo alcanzable desde otros contenedores de esta red,
+    # nunca desde fuera de la VM (ver docs/DEPLOY.md, sección firewall).
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: .env.prod
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      LLM_OLLAMA_BASE_URL: http://llm-inference:11434
+      CELERY_BROKER_URL: redis://redis:6379/0
+    volumes:
+      - media_data:/app/media
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # Mismo comentario que en docker-compose.yml: comparte imagen/código
+  # con `backend` (aquí, la imagen ya construida, no un bind mount) y
+  # el volumen de media para leer los documentos que `backend` recibe.
+  # No corre `migrate`/`collectstatic` (SKIP_MIGRATIONS): esos ya
+  # corrieron en `backend` antes de que este arranque (depends_on
+  # service_healthy).
+  worker:
+    build: ./backend
+    env_file: .env.prod
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      SKIP_MIGRATIONS: "true"
+    volumes:
+      - media_data:/app/media
+    command: celery -A config worker --loglevel=info
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Build de producción (npm run build) servido por NGINX, no el
+  # servidor de desarrollo de Vite (ver frontend/Dockerfile.prod). NGINX
+  # además hace de reverse proxy hacia `backend` para /api/ y sirve
+  # /media/ directamente desde el volumen compartido — así el navegador
+  # ve un solo origen (la IP/dominio de la VM en el puerto 80), sin
+  # necesitar CORS entre frontend y backend en producción.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE_URL: /api
+    volumes:
+      - media_data:/app/media:ro
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  # Igual que en docker-compose.yml pero SIN el perfil "llm" apagado por
+  # defecto: en producción el asistente no tiene sentido sin esto, así
+  # que se documenta pasar --profile llm explícitamente al levantar (ver
+  # comentario de uso arriba) en vez de asumirlo silenciosamente.
+  llm-inference:
+    image: ollama/ollama:latest
+    profiles: ["llm"]
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  ollama_data:
+  media_data:

@@ -69,6 +69,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Sirve los estáticos de Django (admin, DRF browsable API) desde el
+    # propio proceso de gunicorn en producción, sin depender de que NGINX
+    # conozca las rutas internas de Django (ver docs/DEPLOY.md).
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -139,6 +143,19 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# Definir STORAGES reemplaza también el storage "default" (archivos
+# subidos por usuarios, ver MEDIA_ROOT abajo) si no se declara
+# explícitamente — Django deja de aplicar su valor por defecto
+# (FileSystemStorage) en cuanto este setting existe.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Almacenamiento local para el MVP (ver docs/ARCHITECTURE.md #3.7); la
 # interfaz de Django (FileField) permite migrar a S3/MinIO más adelante

@@ -474,3 +474,53 @@ suficiente como para justificar la inversión, se contrata una auditoría
 de seguridad externa que lo pida explícitamente, o se detecta en
 producción un bug de aislamiento que RLS hubiera prevenido (en cuyo
 caso, además de corregir el bug puntual, se prioriza RLS de inmediato).
+
+---
+
+## ADR-014 — Despliegue: una sola VM Always Free de Oracle Cloud,
+self-hosting completo
+
+**Contexto:** con las Fases 0–12 completas, se necesitaba un entorno
+real (no local) para demostrar el MVP, sin costo, sin comprometer la
+decisión ya tomada de que el LLM y el OCR corren en infraestructura
+propia, nunca en un proveedor externo (ver ADR-004, ADR-010, y
+`docs/ROADMAP.md` "Qué se necesita para considerar que existe un MVP
+demostrable"). Esa restricción descarta a la mayoría de los tiers
+gratuitos típicos (Render, Railway, Fly.io): dan ~512MB de RAM en su
+capa gratis, insuficiente para correr Ollama con cualquier modelo
+razonable.
+
+**Decisión:** desplegar el `docker compose` completo (backend, worker,
+Postgres, Redis, Ollama, frontend) en una única VM del tier "Always
+Free" de Oracle Cloud (`VM.Standard.A1.Flex`, hasta 4 OCPU / 24GB RAM,
+ARM, gratis de forma permanente, no un trial con vencimiento). El
+frontend se sirve como build de producción vía NGINX (no el servidor de
+desarrollo de Vite), que además hace de reverse proxy hacia el backend
+bajo el mismo origen — evitando CORS en producción sin agregar un
+servicio nuevo. Ver `docs/DEPLOY.md` para la guía paso a paso y
+`docker-compose.prod.yml`/`.env.prod.example` para la configuración.
+
+**Alternativas consideradas:**
+- *Render/Railway/Fly.io free tier:* descartado por RAM insuficiente
+  para el LLM self-hosted (ver contexto).
+- *Usar una API de LLM externa (Groq, Gemini, etc.) para poder usar
+  esos free tiers:* descartado — contradice directamente ADR-004/
+  ADR-010 y el criterio de aceptación del MVP ("el LLM y el OCR corren
+  en infraestructura propia... en el ambiente de demo/producción").
+  Queda como opción documentada, no tomada, si en el futuro se
+  reevaluara esa restricción explícitamente.
+- *Separar el despliegue en varios servicios gratuitos* (frontend en
+  Vercel/Cloudflare Pages, backend+DB en Render, LLM en otro lado):
+  descartado por complejidad innecesaria para un MVP — más piezas
+  gratuitas que coordinar, sin resolver el problema de fondo (dónde
+  correr el LLM con RAM suficiente gratis).
+
+**Consecuencias:** sin HTTPS todavía (no hay dominio propio apuntando a
+la VM, y Let's Encrypt no emite certificados para IPs desnudas) — queda
+documentado como paso pendiente en `docs/DEPLOY.md` §9, aceptable para
+una demo/piloto inicial pero no para manejar datos sensibles de
+producción real de forma indefinida. Un solo punto de falla (una sola
+VM, sin redundancia, sin balanceo de carga) — aceptable para el volumen
+de un MVP/piloto, a revisar si el negocio crece más allá de eso. Sin
+respaldo automatizado de base de datos todavía (solo manual, ver
+`docs/DEPLOY.md` §8).

@@ -29,6 +29,10 @@ fi
 
 if [ "$SKIP_MIGRATIONS" != "true" ]; then
   python manage.py migrate --noinput
+  # collectstatic solo importa para el servicio que sirve HTTP (backend),
+  # no para el worker de Celery — se reutiliza la misma condición porque
+  # es exactamente la que ya distingue a ambos (ver docker-compose*.yml).
+  python manage.py collectstatic --noinput
 fi
 
 exec "$@"

@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 # Python
 __pycache__/
@@ -19,8 +20,10 @@ dist/
 .idea/
 .DS_Store
 
-# Media subido por usuarios (documentos, imágenes)
+# Media subido por usuarios (documentos, imágenes) y estáticos recolectados
+# (collectstatic, ver docs/DEPLOY.md)
 media/
+staticfiles/
 
 # Logs
 *.log

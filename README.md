@@ -9,6 +9,11 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
+**Despliegue.** Preparado para correr en una VM real (self-hosting
+completo, sin proveedores externos de LLM/OCR, sin costo) usando el tier
+Always Free de Oracle Cloud — ver `docs/DEPLOY.md` para la guía paso a
+paso y `docs/DECISIONS.md` ADR-014 para el porqué de esta elección.
+
 **Fase 12 — Demo MVP.** Fase de integración y validación, sin
 funcionalidad nueva: el guion de demo completo (abrir MAGAVI desde un
 celular → iniciar sesión → "¿cuánto vendí hoy?" → "Vendí 3 cafés a
@@ -127,6 +132,8 @@ Docker localmente.
 - [`docs/TESTING.md`](docs/TESTING.md) — estrategia de pruebas.
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — decisiones arquitectónicas
   (ADR) y su justificación.
+- [`docs/DEPLOY.md`](docs/DEPLOY.md) — guía de despliegue en producción
+  (Oracle Cloud Always Free).
 
 ## Stack (resumen; justificación completa en `docs/DECISIONS.md`)
 

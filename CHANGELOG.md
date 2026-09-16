@@ -5,6 +5,39 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Despliegue en producción
+
+Preparación para correr en una VM real (self-hosting completo, ver
+`docs/DECISIONS.md` ADR-014 y `docs/DEPLOY.md`), sin cambiar el
+comportamiento de desarrollo (`docker-compose.yml` intacto).
+
+- `docker-compose.prod.yml` (nuevo, autocontenido — no se combina con
+  `docker-compose.yml`): backend con gunicorn, worker, Postgres/Redis
+  sin puertos publicados al host, frontend como build de producción
+  servido por NGINX, volumen `media_data` compartido entre
+  backend/worker/frontend para persistir documentos subidos.
+- `frontend/Dockerfile.prod` + `frontend/nginx.conf` (nuevos): build de
+  producción (`npm run build`) servido por NGINX, que además hace de
+  reverse proxy hacia el backend (`/api/`) y sirve `/media/` desde el
+  volumen compartido — mismo origen en el navegador, sin necesitar CORS
+  en producción.
+- `backend`: `whitenoise` para servir los estáticos de Django (admin,
+  DRF browsable API) desde el propio proceso de gunicorn;
+  `collectstatic` automático en `docker-entrypoint.sh`. Al definir
+  `STORAGES` para esto se encontró y corrigió un bug real: sin declarar
+  también la clave `"default"`, Django dejaba de aplicar el storage por
+  defecto para archivos subidos por usuarios (documentos/OCR),
+  rompiendo 17 tests existentes — se detectó corriendo la suite
+  completa antes de dar el cambio por terminado, no solo el flujo que
+  se estaba tocando.
+- `.env.prod.example` (nuevo): plantilla de variables de producción
+  (`DJANGO_DEBUG=false`, sin TLS todavía por no haber dominio propio,
+  etc.).
+- `docs/DEPLOY.md` (nuevo): guía paso a paso para Oracle Cloud Always
+  Free, incluyendo el firewall de dos capas de OCI (Security List +
+  iptables de la VM — bloquea el puerto 80 aunque solo se configure
+  una de las dos).
+
 ### Fase 12 — Demo MVP
 
 Fase de integración y validación (sin funcionalidad nueva, ver
