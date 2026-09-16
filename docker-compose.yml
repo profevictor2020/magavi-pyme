@@ -37,11 +37,23 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
 
   # Procesa OCR + estructuración de documentos en background (ver
   # docs/DECISIONS.md ADR-007, docs/ROADMAP.md Fase 9). Comparte imagen
   # y código con `backend` vía el mismo bind mount, así que ve los
   # archivos que `backend` sube a MEDIA_ROOT sin configuración extra.
+  # No corre `migrate` por su cuenta (SKIP_MIGRATIONS): si lo hiciera,
+  # correría en paralelo con el `migrate` de `backend` contra la misma
+  # base de datos recién creada y ambos chocarían (UniqueViolation al
+  # crear las mismas tablas dos veces). En cambio espera a que
+  # `backend` esté healthy (lo que solo pasa después de que su propio
+  # `migrate` terminó y el servidor ya responde).
   worker:
     build: ./backend
     env_file: .env
@@ -49,14 +61,13 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       CELERY_BROKER_URL: redis://redis:6379/0
+      SKIP_MIGRATIONS: "true"
     volumes:
       - ./backend:/app
     command: celery -A config worker --loglevel=info
     depends_on:
-      postgres:
+      backend:
         condition: service_healthy
-      redis:
-        condition: service_started
 
   frontend:
     build: ./frontend

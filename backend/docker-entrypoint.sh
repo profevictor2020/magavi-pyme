@@ -27,6 +27,8 @@ PYEOF
   echo "PostgreSQL disponible."
 fi
 
-python manage.py migrate --noinput
+if [ "$SKIP_MIGRATIONS" != "true" ]; then
+  python manage.py migrate --noinput
+fi
 
 exec "$@"
