@@ -26,6 +26,7 @@ const INTENT_LABELS: Record<string, string> = {
   crear_producto: 'Crear producto',
   consultar_ventas: 'Consultar ventas',
   consultar_stock_bajo: 'Consultar stock bajo',
+  consultar_stock_producto: 'Consultar stock de un producto',
 }
 
 export function intentLabel(name: string): string {

@@ -5,6 +5,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nuevo intent de solo lectura: consultar stock de un producto puntual
+
+Faltaba un intent para "¿cuánto stock tengo de X?" — solo existía
+`consultar_stock_bajo` (lista general de productos bajo el umbral), no
+una consulta de un producto específico por nombre. `consultar_stock_producto`
+reutiliza `get_product_or_raise` (con aislamiento por empresa) y devuelve
+la misma forma que un ítem de `consultar_stock_bajo`, así que el frontend
+no necesitó ningún cambio para renderizarlo.
+
 ### El asistente ahora razona con el stock real (grounding)
 
 El contexto de catálogo que se le manda al LLM (`assistant/orchestrator.py`)

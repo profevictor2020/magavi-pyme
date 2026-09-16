@@ -57,6 +57,34 @@ class ProponerIntentTests(TestCase):
 
         self.assertEqual(resultado["result"]["today"], {"total": "0.00", "count": 0})
 
+    def test_consultar_stock_producto_executes_immediately(self):
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="consultar_stock_producto",
+            raw_parameters={"product_id": self.product.id},
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"], [{
+            "id": self.product.id,
+            "name": self.product.name,
+            "current_stock": "10.000",
+            "low_stock_threshold": "0.000",
+        }])
+
+    def test_consultar_stock_producto_de_otra_empresa_es_rechazado(self):
+        other_company = CompanyFactory()
+        foreign_product = ProductFactory(company=other_company)
+
+        with self.assertRaises(ValidationError):
+            proponer_intent(
+                company=self.company,
+                user=self.user,
+                intent_name="consultar_stock_producto",
+                raw_parameters={"product_id": foreign_product.id},
+            )
+
     def test_unknown_intent_is_rejected(self):
         with self.assertRaises(ValidationError):
             proponer_intent(

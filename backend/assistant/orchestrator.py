@@ -54,6 +54,8 @@ le exijas al usuario decir literalmente la palabra "motivo".
 "initial_stock": "<numero opcional>"}
 - consultar_ventas: {}
 - consultar_stock_bajo: {}
+- consultar_stock_producto: {"product_id": <int>} (para preguntas sobre \
+el stock de UN producto puntual, ej. "¿cuánto stock tengo de...?")
 
 Si no puedes determinar con certeza qué acción corresponde (falta \
 información, el mensaje es ambiguo, o no corresponde a ninguna de estas \

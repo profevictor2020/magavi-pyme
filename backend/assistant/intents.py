@@ -21,6 +21,7 @@ from sales.services import consultar_ventas, crear_venta
 
 from .serializers import (
     AjustarInventarioIntentSerializer,
+    ConsultarStockProductoIntentSerializer,
     CrearProductoIntentSerializer,
     EmptyParamsSerializer,
 )
@@ -92,6 +93,21 @@ def _ejecutar_consultar_stock_bajo(*, company, user, params):
     return consultar_stock_bajo(company=company)
 
 
+def _ejecutar_consultar_stock_producto(*, company, user, params):
+    # Misma forma que un elemento de consultar_stock_bajo (envuelto en una
+    # lista de un solo ítem): reutiliza el mismo render en el frontend
+    # (ResultView) sin necesitar un caso nuevo.
+    product = get_product_or_raise(company=company, product_id=params["product_id"])
+    return [
+        {
+            "id": product.id,
+            "name": product.name,
+            "current_stock": str(product.current_stock),
+            "low_stock_threshold": str(product.low_stock_threshold),
+        }
+    ]
+
+
 @dataclass(frozen=True)
 class IntentDefinition:
     parameter_serializer: type
@@ -113,6 +129,9 @@ INTENTS: dict[str, IntentDefinition] = {
     "consultar_ventas": IntentDefinition(EmptyParamsSerializer, False, _ejecutar_consultar_ventas),
     "consultar_stock_bajo": IntentDefinition(
         EmptyParamsSerializer, False, _ejecutar_consultar_stock_bajo
+    ),
+    "consultar_stock_producto": IntentDefinition(
+        ConsultarStockProductoIntentSerializer, False, _ejecutar_consultar_stock_producto
     ),
 }
 

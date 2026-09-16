@@ -17,6 +17,10 @@ class AjustarInventarioIntentSerializer(AdjustStockSerializer):
     product_id = serializers.IntegerField()
 
 
+class ConsultarStockProductoIntentSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+
+
 class CrearProductoIntentSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255)
     unit = serializers.ChoiceField(
