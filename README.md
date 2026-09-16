@@ -9,10 +9,15 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
-**Despliegue.** Preparado para correr en una VM real (self-hosting
-completo, sin proveedores externos de LLM/OCR, sin costo) usando el tier
-Always Free de Oracle Cloud — ver `docs/DEPLOY.md` para la guía paso a
-paso y `docs/DECISIONS.md` ADR-014 para el porqué de esta elección.
+**Despliegue.** Dos caminos, documentados y mantenidos en paralelo:
+
+- `docs/DEPLOY.md` — self-hosting completo (sin proveedores externos de
+  LLM/OCR) en una VM del tier Always Free de Oracle Cloud. El objetivo
+  para datos reales (ver `docs/DECISIONS.md` ADR-014).
+- `docs/DEPLOY_RENDER.md` — demo rápida en Render + Neon + DeepSeek,
+  habilitada mientras Oracle Cloud no tiene capacidad disponible para la
+  VM gratuita. **Sin datos reales de ninguna pyme** (ver ADR-015 para el
+  porqué de esta excepción acotada).
 
 **Fase 12 — Demo MVP.** Fase de integración y validación, sin
 funcionalidad nueva: el guion de demo completo (abrir MAGAVI desde un
@@ -134,6 +139,8 @@ Docker localmente.
   (ADR) y su justificación.
 - [`docs/DEPLOY.md`](docs/DEPLOY.md) — guía de despliegue en producción
   (Oracle Cloud Always Free).
+- [`docs/DEPLOY_RENDER.md`](docs/DEPLOY_RENDER.md) — guía de despliegue
+  de demo alternativa (Render + Neon + DeepSeek, sin datos reales).
 
 ## Stack (resumen; justificación completa en `docs/DECISIONS.md`)
 

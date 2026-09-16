@@ -5,6 +5,33 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Despliegue de demo alternativo (Render + Neon + DeepSeek)
+
+Habilitado en paralelo al de Oracle Cloud (ver entrada siguiente)
+porque la VM Always Free resultó sin capacidad disponible al momento de
+crearla (ver `docs/DECISIONS.md` ADR-015). Sin datos reales de ninguna
+pyme — es una excepción explícita y acotada a `LLM_PROVIDER=ollama`
+(ADR-004/ADR-010).
+
+- `render.yaml` (nuevo): Blueprint de Render con dos servicios —
+  backend (Docker, gunicorn, healthcheck en `/api/health/`) y frontend
+  (static site, con reescritura SPA para React Router). Sin worker de
+  Celery/Redis (el free tier de Render no tiene instancia gratis para
+  "Background Worker"): las tareas corren síncronas
+  (`CELERY_TASK_ALWAYS_EAGER=true`, el mismo mecanismo que ya usa CI).
+- `backend/Dockerfile.render` (nuevo): variante de `backend/Dockerfile`
+  con gunicorn escuchando en `$PORT` (Render lo inyecta en runtime) en
+  vez del servidor de desarrollo.
+- `backend/config/settings.py`: `SECURE_PROXY_SSL_HEADER` (para que
+  Django confíe en el `X-Forwarded-Proto` que pone el proxy de Render/
+  NGINX delante de gunicorn, sin lo cual `SECURE_SSL_REDIRECT=True`
+  entra en loop infinito de redirect); `DATABASES.OPTIONS.sslmode`
+  configurable (Neon, el Postgres externo usado en este despliegue,
+  exige SSL).
+- `docs/DEPLOY_RENDER.md` (nuevo): guía paso a paso (Neon, DeepSeek,
+  Render Blueprint), con las limitaciones del entorno documentadas
+  explícitamente (filesystem efímero, cold start del free tier).
+
 ### Despliegue en producción
 
 Preparación para correr en una VM real (self-hosting completo, ver

@@ -1,0 +1,91 @@
+# Blueprint de Render para un despliegue de DEMO (ver docs/DEPLOY_RENDER.md
+# y docs/DECISIONS.md ADR-015): a diferencia de docker-compose.prod.yml
+# (Oracle Cloud, self-hosting completo), acá el LLM es una API externa
+# (DeepSeek) y la base de datos es Neon (Postgres externo) — una
+# excepción explícita y acotada a un entorno sin datos reales de pymes,
+# ver ADR-015 para el porqué.
+#
+# Tampoco hay worker de Celery/Redis: el free tier de Render no tiene un
+# tipo de instancia gratis para "Background Worker", así que las tareas
+# (OCR/estructuración de documentos) corren de forma síncrona en el
+# mismo proceso del backend (CELERY_TASK_ALWAYS_EAGER=true) — el mismo
+# mecanismo que ya usa el job `backend` de CI, sin Redis (ver
+# .github/workflows/ci.yml). Para una demo de bajo tráfico es aceptable
+# que subir un documento tarde unos segundos más en responder.
+#
+# Uso: Render Dashboard → New → Blueprint → conectar este repo. Los
+# valores con "sync: false" se piden en pantalla al crear el Blueprint
+# (ver docs/DEPLOY_RENDER.md para de dónde sale cada uno).
+
+services:
+  - type: web
+    name: magavi-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile.render
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health/
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "false"
+      # Si Render le agrega un sufijo al nombre (poco común, solo si
+      # "magavi-backend" ya está tomado), hay que actualizar este valor
+      # y CORS_ALLOWED_ORIGINS/VITE_API_BASE_URL con la URL real.
+      - key: DJANGO_ALLOWED_HOSTS
+        value: magavi-backend.onrender.com
+      - key: DJANGO_CORS_ALLOWED_ORIGINS
+        value: https://magavi-frontend.onrender.com
+      # Render sirve todo por HTTPS en su borde; SECURE_PROXY_SSL_HEADER
+      # (ver config/settings.py) es lo que le permite a Django confiar
+      # en eso sin entrar en loop de redirect.
+      - key: DJANGO_SECURE_SSL_REDIRECT
+        value: "true"
+      # --- Postgres externo (Neon, ver docs/DEPLOY_RENDER.md #2) ---
+      - key: POSTGRES_DB
+        sync: false
+      - key: POSTGRES_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false
+      - key: POSTGRES_HOST
+        sync: false
+      - key: POSTGRES_PORT
+        value: "5432"
+      - key: POSTGRES_SSLMODE
+        value: require
+      # --- Asistente / LLM (ver docs/DECISIONS.md ADR-010, ADR-015) ---
+      - key: LLM_PROVIDER
+        value: deepseek_dev
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      # --- Sin worker/Redis (ver comentario arriba) ---
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "true"
+
+  - type: web
+    runtime: static
+    name: magavi-frontend
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    plan: free
+    region: oregon
+    # SPA: cualquier ruta que no sea un archivo real cae a index.html
+    # (React Router maneja el resto client-side) — mismo motivo que
+    # frontend/nginx.conf en el despliegue de Oracle.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Se hornea en el bundle en tiempo de build (Vite) — a diferencia
+      # del despliegue de Oracle, acá frontend y backend NO comparten
+      # origen (son dos servicios/dominios de Render distintos), así
+      # que tiene que ser la URL absoluta del backend.
+      - key: VITE_API_BASE_URL
+        value: https://magavi-backend.onrender.com/api

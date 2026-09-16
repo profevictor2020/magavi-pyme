@@ -524,3 +524,75 @@ VM, sin redundancia, sin balanceo de carga) — aceptable para el volumen
 de un MVP/piloto, a revisar si el negocio crece más allá de eso. Sin
 respaldo automatizado de base de datos todavía (solo manual, ver
 `docs/DEPLOY.md` §8).
+
+---
+
+## ADR-015 — Despliegue de demo alternativo: Render + Neon + DeepSeek
+(excepción explícita y acotada, sin datos reales)
+
+**Contexto:** al ejecutar ADR-014 en la práctica, la forma
+`VM.Standard.A1.Flex` resultó sin capacidad disponible ("Out of
+capacity") en la región Always Free de la cuenta (Santiago), tanto en
+4 OCPU/24GB como en 2 OCPU/12GB, y la cuenta (recién creada) tampoco
+tenía todavía permiso para suscribirse a una región adicional donde
+reintentar — una limitación temporal de aprovisionamiento de cuenta,
+no del diseño. En vez de bloquear toda demostración del MVP hasta que
+esa capacidad se libere, se decidió habilitar un camino de despliegue
+alternativo, en paralelo, para tener algo real y navegable mientras
+tanto.
+
+**Decisión:** desplegar en Render (backend + frontend, ambos free
+tier) usando **Neon** como Postgres externo (gratis, sin fecha de
+vencimiento, a diferencia del propio Postgres de Render que expira a
+los 30 días) y **DeepSeek** (`LLM_PROVIDER=deepseek_dev`, ya existente
+en el código desde ADR-010, antes limitado a desarrollo) como proveedor
+de LLM para el asistente. Esto **contradice directamente** ADR-004/
+ADR-010 ("nunca un proveedor externo en producción") — se acepta
+**únicamente** porque este entorno de Render queda marcado, explícita y
+permanentemente, como demo sin datos reales de ninguna pyme (ver
+`docs/DEPLOY_RENDER.md`, encabezado). No reemplaza a ADR-014: el camino
+de Oracle Cloud (self-hosted, apto para datos reales) sigue siendo el
+objetivo cuando la capacidad esté disponible, y ambos despliegues
+pueden coexistir mientras tanto — `render.yaml` y
+`docker-compose.prod.yml` no se estorban entre sí.
+
+Tampoco hay worker de Celery separado: el free tier de Render no
+ofrece un tipo de instancia gratis para "Background Worker" (confirmado
+al revisar su pricing — background workers no tienen free tier, incluso
+si el tipo de servicio "aparece" disponible). En vez de forzar un
+worker pagado solo para esto, se usa `CELERY_TASK_ALWAYS_EAGER=true`
+(el mismo mecanismo, sin Redis, que ya usa el job `backend` de CI desde
+la Fase 11) — el procesamiento de OCR/documentos corre síncrono dentro
+del propio request de subida.
+
+**Por qué Neon y no el Postgres propio de Render:** el Postgres gratis
+de Render se borra automáticamente a los 30 días de creado (con 14 días
+de gracia) — inviable para algo que se quiere seguir usando como demo
+más de un mes sin recrear la base cada vez. Neon no tiene esa fecha de
+vencimiento en su tier gratis (sí duerme por inactividad, pero despierta
+sola en la siguiente consulta).
+
+**Alternativas consideradas:**
+- *Esperar a que se libere capacidad en Oracle Cloud sin tener nada
+  desplegado mientras tanto:* descartado — no hay razón para bloquear
+  toda demostración por un problema de capacidad ajeno al diseño,
+  dado que existe un camino igual de rápido de habilitar y
+  perfectamente aceptable para un entorno sin datos reales.
+- *Postgres propio de Render en vez de Neon:* descartado por el
+  vencimiento a 30 días (ver arriba).
+- *Pagar por un Background Worker en Render para mantener Celery+Redis
+  igual que en Oracle:* descartado — costo innecesario cuando
+  `CELERY_TASK_ALWAYS_EAGER` ya es un mecanismo probado (lo usa CI desde
+  la Fase 11) y la demo no tiene el volumen que justificaría procesar
+  documentos de forma realmente asíncrona.
+
+**Consecuencias:** dos guías de despliegue conviven (`docs/DEPLOY.md`
+para Oracle/self-hosted, `docs/DEPLOY_RENDER.md` para esta demo) — hay
+que mantener claro cuál es cada una. El filesystem del backend en
+Render es efímero (documentos subidos no persisten entre reinicios/
+despliegues) y el servicio duerme tras ~15 min de inactividad (cold
+start ~30-50s) — ambos aceptables para una demo, documentados en
+`docs/DEPLOY_RENDER.md`, nunca para producción real. Si más adelante
+Oracle Cloud da capacidad, ese despliegue pasa a ser el "real" (con
+datos reales de pilotos), y este de Render queda como entorno de
+demo/pruebas permanente, no se retira.

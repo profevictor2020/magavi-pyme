@@ -113,6 +113,11 @@ DATABASES = {
         "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "magavi_dev_password"),
         "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
         "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        # Algunos proveedores de Postgres externos (ej. Neon, ver
+        # docs/DEPLOY_RENDER.md) exigen SSL. "prefer" (el default de
+        # psycopg) no lo fuerza — no afecta al Postgres de
+        # docker-compose*.yml, que no tiene TLS configurado.
+        "OPTIONS": {"sslmode": os.environ.get("POSTGRES_SSLMODE", "prefer")},
     }
 }
 
@@ -242,6 +247,12 @@ CSRF_COOKIE_SECURE = not DEBUG
 SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 SECURE_HSTS_PRELOAD = not DEBUG
+# Cuando TLS lo termina un proxy delante de gunicorn (NGINX, o la propia
+# plataforma en el caso de Render — ver docs/DEPLOY_RENDER.md), Django
+# recibe la request como HTTP puro salvo que confíe en esta cabecera:
+# sin esto, SECURE_SSL_REDIRECT=True entra en loop infinito de redirect
+# (cree que la request nunca llegó por HTTPS, aunque sí fue así).
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # X-Content-Type-Options, Referrer-Policy y X-Frame-Options ya vienen de
 # los defaults de Django (SecurityMiddleware/XFrameOptionsMiddleware,
 # ambos instalados arriba) — no hace falta repetirlos aquí.
