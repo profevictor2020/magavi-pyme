@@ -118,6 +118,19 @@ class InterpretarYProponerTests(TestCase):
         self.assertEqual(messages[1].role, Message.Role.ASSISTANT)
         self.assertIsNotNone(messages[1].structured_intent)
 
+    def test_mensaje_de_crear_producto_crea_propuesta_pendiente(self):
+        llm = FakeLLMProvider([_json("crear_producto", {"name": "Té helado"})])
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="agrega un producto nuevo, té helado",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "pending_confirmation")
+        self.assertEqual(resultado["intent"], "crear_producto")
+
     def test_intent_con_producto_de_otra_empresa_no_se_ejecuta(self):
         other_company = CompanyFactory()
         foreign_product = ProductFactory(company=other_company, current_stock=Decimal("10"))

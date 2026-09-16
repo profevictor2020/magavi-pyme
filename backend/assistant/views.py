@@ -6,7 +6,8 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from catalog.serializers import InventoryMovementSerializer
+from catalog.models import Product
+from catalog.serializers import InventoryMovementSerializer, ProductSerializer
 from core.tenancy import get_current_company
 from core.throttling import CompanyScopedRateThrottle
 from inventory.models import InventoryMovement
@@ -33,6 +34,7 @@ _RESULT_SERIALIZERS = {
     Sale: SaleSerializer,
     Purchase: PurchaseSerializer,
     InventoryMovement: InventoryMovementSerializer,
+    Product: ProductSerializer,
 }
 
 

@@ -5,6 +5,22 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nuevo intent del asistente: crear productos por chat
+
+- `catalog/services.py`: nueva función de Tool Layer `crear_producto`
+  (mismo patrón que `crear_venta`/`registrar_compra`/`ajustar_inventario`),
+  reutilizada tanto por `ProductViewSet` como por el asistente. El stock
+  inicial se siembra vía `ajustar_inventario`, nunca escribiendo
+  `current_stock` directo. De paso se corrigió un vacío real: crear un
+  producto no dejaba ningún registro en `AuditLog` — ahora sí, igual que
+  el resto de los flujos de escritura (ver `docs/SECURITY.md` #10).
+- `assistant/intents.py`, `assistant/serializers.py`,
+  `assistant/orchestrator.py`: nuevo intent `crear_producto` (con
+  confirmación obligatoria, igual que los demás), y el prompt del
+  asistente ya lo conoce.
+- Frontend: `ResultView` renderiza el producto creado; `format.ts` tiene
+  las etiquetas correspondientes.
+
 ### Despliegue de demo alternativo (Render + Neon + DeepSeek)
 
 Habilitado en paralelo al de Oracle Cloud (ver entrada siguiente)

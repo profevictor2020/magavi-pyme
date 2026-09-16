@@ -1,5 +1,8 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
+from catalog.models import Product
 from catalog.serializers import AdjustStockSerializer
 
 from .models import Conversation, Message
@@ -12,6 +15,22 @@ class EmptyParamsSerializer(serializers.Serializer):
 
 class AjustarInventarioIntentSerializer(AdjustStockSerializer):
     product_id = serializers.IntegerField()
+
+
+class CrearProductoIntentSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+    unit = serializers.ChoiceField(
+        choices=Product.Unit.choices, required=False, default=Product.Unit.UNIDAD
+    )
+    default_price = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, default=Decimal("0")
+    )
+    default_cost = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, default=Decimal("0")
+    )
+    initial_stock = serializers.DecimalField(
+        max_digits=12, decimal_places=3, required=False, default=Decimal("0")
+    )
 
 
 class IntentEnvelopeSerializer(serializers.Serializer):

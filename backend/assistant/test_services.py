@@ -106,6 +106,21 @@ class ConfirmarIntentTests(TestCase):
         self.assertEqual(pending.status, PendingAction.Status.CONFIRMED)
         self.assertIsNotNone(pending.resolved_at)
 
+    def test_confirm_crear_producto_creates_it_with_initial_stock(self):
+        propuesta = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="crear_producto",
+            raw_parameters={"name": "Café molido", "initial_stock": "5"},
+        )
+
+        product = confirmar_intent(
+            company=self.company, user=self.user, pending_action_id=propuesta["pending_action_id"]
+        )
+
+        self.assertEqual(product.name, "Café molido")
+        self.assertEqual(product.current_stock, Decimal("5.000"))
+
     def test_double_confirm_is_rejected_and_does_not_duplicate(self):
         propuesta = self._proponer_venta()
         confirmar_intent(

@@ -12,14 +12,18 @@ objetos concretos y delega.
 from dataclasses import dataclass
 from typing import Callable
 
-from catalog.services import consultar_stock_bajo, get_product_or_raise
+from catalog.services import consultar_stock_bajo, crear_producto, get_product_or_raise
 from inventory.services import ajustar_inventario
 from purchases.serializers import PurchaseCreateSerializer
 from purchases.services import registrar_compra
 from sales.serializers import SaleCreateSerializer
 from sales.services import consultar_ventas, crear_venta
 
-from .serializers import AjustarInventarioIntentSerializer, EmptyParamsSerializer
+from .serializers import (
+    AjustarInventarioIntentSerializer,
+    CrearProductoIntentSerializer,
+    EmptyParamsSerializer,
+)
 
 
 def _resolve_items(company, raw_items, price_field):
@@ -67,6 +71,19 @@ def _ejecutar_ajustar_inventario(*, company, user, params):
     )
 
 
+def _ejecutar_crear_producto(*, company, user, params):
+    return crear_producto(
+        company=company,
+        user=user,
+        name=params["name"],
+        unit=params["unit"],
+        default_price=params["default_price"],
+        default_cost=params["default_cost"],
+        initial_stock=params["initial_stock"],
+        origen="assistant",
+    )
+
+
 def _ejecutar_consultar_ventas(*, company, user, params):
     return consultar_ventas(company=company)
 
@@ -89,6 +106,9 @@ INTENTS: dict[str, IntentDefinition] = {
     ),
     "ajustar_inventario": IntentDefinition(
         AjustarInventarioIntentSerializer, True, _ejecutar_ajustar_inventario
+    ),
+    "crear_producto": IntentDefinition(
+        CrearProductoIntentSerializer, True, _ejecutar_crear_producto
     ),
     "consultar_ventas": IntentDefinition(EmptyParamsSerializer, False, _ejecutar_consultar_ventas),
     "consultar_stock_bajo": IntentDefinition(

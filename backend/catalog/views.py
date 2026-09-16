@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import F
 from django.shortcuts import get_object_or_404
@@ -13,6 +11,7 @@ from inventory.services import ajustar_inventario
 
 from .models import Product
 from .serializers import AdjustStockSerializer, InventoryMovementSerializer, ProductSerializer
+from .services import crear_producto
 
 
 class ProductViewSet(
@@ -44,18 +43,13 @@ class ProductViewSet(
 
     def perform_create(self, serializer):
         company = get_current_company(self.request)
-        initial_stock = serializer.validated_data.pop("initial_stock", Decimal("0"))
-        product = serializer.save(company=company)
-        if initial_stock:
-            ajustar_inventario(
-                company=company,
-                user=self.request.user,
-                product=product,
-                cantidad=initial_stock,
-                motivo="Stock inicial",
-                origen="manual",
-            )
-            product.refresh_from_db(fields=["current_stock"])
+        product = crear_producto(
+            company=company,
+            user=self.request.user,
+            origen="manual",
+            **serializer.validated_data,
+        )
+        serializer.instance = product
 
     def perform_update(self, serializer):
         serializer.validated_data.pop("initial_stock", None)

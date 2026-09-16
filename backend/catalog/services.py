@@ -1,7 +1,75 @@
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import F
 
+from audit.services import audit_source_for_origen, registrar_auditoria
+from inventory.services import ajustar_inventario
+
 from .models import Product
+
+
+def crear_producto(
+    *,
+    company,
+    user,
+    name,
+    unit=Product.Unit.UNIDAD,
+    sku=None,
+    default_price=Decimal("0"),
+    default_cost=Decimal("0"),
+    low_stock_threshold=Decimal("0"),
+    initial_stock=Decimal("0"),
+    is_active=True,
+    origen="manual",
+):
+    """Tool Layer: único punto de escritura de productos (mismo patrón que
+    crear_venta/registrar_compra/ajustar_inventario). Usado por
+    `ProductViewSet.perform_create` y por el asistente conversacional.
+
+    El stock inicial nunca se escribe directo en `current_stock` (columna
+    cacheada, ver catalog/models.py): se siembra vía `ajustar_inventario`,
+    igual que cualquier otro movimiento de inventario, para que quede su
+    propio registro en InventoryMovement.
+    """
+    if sku and Product.objects.for_company(company).filter(sku=sku).exists():
+        raise ValidationError(f"Ya existe un producto con el SKU {sku} en esta empresa.")
+
+    with transaction.atomic():
+        product = Product.objects.create(
+            company=company,
+            name=name,
+            unit=unit,
+            sku=sku,
+            default_price=default_price,
+            default_cost=default_cost,
+            low_stock_threshold=low_stock_threshold,
+            is_active=is_active,
+        )
+
+        if initial_stock:
+            ajustar_inventario(
+                company=company,
+                user=user,
+                product=product,
+                cantidad=initial_stock,
+                motivo="Stock inicial",
+                origen=origen,
+            )
+            product.refresh_from_db(fields=["current_stock"])
+
+        registrar_auditoria(
+            company=company,
+            user=user,
+            action="product.create",
+            entity_type="Product",
+            entity_id=product.id,
+            after={"name": product.name, "default_price": str(product.default_price)},
+            source=audit_source_for_origen(origen),
+        )
+
+    return product
 
 
 def consultar_stock_bajo(*, company):

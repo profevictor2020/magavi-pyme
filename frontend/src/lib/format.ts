@@ -23,6 +23,7 @@ const INTENT_LABELS: Record<string, string> = {
   crear_venta: 'Registrar venta',
   registrar_compra: 'Registrar compra',
   ajustar_inventario: 'Ajustar inventario',
+  crear_producto: 'Crear producto',
   consultar_ventas: 'Consultar ventas',
   consultar_stock_bajo: 'Consultar stock bajo',
 }
@@ -40,6 +41,11 @@ const PARAM_LABELS: Record<string, string> = {
   supplier_name: 'Proveedor',
   cantidad: 'Cantidad',
   motivo: 'Motivo',
+  name: 'Nombre',
+  unit: 'Unidad',
+  default_price: 'Precio de venta',
+  default_cost: 'Costo',
+  initial_stock: 'Stock inicial',
 }
 
 export function paramLabel(key: string): string {

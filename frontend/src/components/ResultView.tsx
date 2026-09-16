@@ -32,6 +32,14 @@ interface LowStockLike {
   low_stock_threshold: string
 }
 
+interface ProductLike {
+  id: number
+  name: string
+  unit: string
+  default_price: string
+  current_stock: string
+}
+
 function isReceipt(value: unknown): value is ReceiptLike {
   return (
     !!value &&
@@ -51,6 +59,10 @@ function isPeriodSummary(value: unknown): value is PeriodSummaryLike {
 
 function isLowStockList(value: unknown): value is LowStockLike[] {
   return Array.isArray(value) && (value.length === 0 || 'current_stock' in value[0])
+}
+
+function isProduct(value: unknown): value is ProductLike {
+  return !!value && typeof value === 'object' && 'default_price' in value && 'unit' in value
 }
 
 /** Renderiza el resultado de un intent ejecutado/confirmado. Cubre las
@@ -103,6 +115,19 @@ export function ResultView({ result }: { result: unknown }) {
         </div>
         <div>
           Esta semana: {formatCLP(result.week.total)} ({result.week.count} ventas)
+        </div>
+      </div>
+    )
+  }
+
+  if (isProduct(result)) {
+    return (
+      <div className="result-card">
+        <strong>
+          Producto creado: {result.name} ({formatCLP(result.default_price)})
+        </strong>
+        <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+          Stock: {result.current_stock} {result.unit}
         </div>
       </div>
     )

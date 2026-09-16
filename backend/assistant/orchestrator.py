@@ -42,6 +42,9 @@ Intents disponibles:
 "unit_cost": "<numero opcional>"}], "supplier_name": "<opcional>"}
 - ajustar_inventario: {"product_id": <int>, "cantidad": "<numero con signo>", \
 "motivo": "<texto>"}
+- crear_producto: {"name": "<texto>", "unit": "<unidad|kg|lt, opcional>", \
+"default_price": "<numero opcional>", "default_cost": "<numero opcional>", \
+"initial_stock": "<numero opcional>"}
 - consultar_ventas: {}
 - consultar_stock_bajo: {}
 
