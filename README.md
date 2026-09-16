@@ -9,17 +9,17 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
-**Fase 7 — Capa de herramientas para el asistente (sin LLM).** Existe el
-contrato completo entre "intención estructurada" y "ejecución": un
-registro de intents soportados (`crear_venta`, `registrar_compra`,
-`ajustar_inventario`, `consultar_ventas`, `consultar_stock_bajo`), una
-máquina de estados de confirmación (`pending → confirmed/cancelled/
-expired`) que revalida todo al confirmar, y un adaptador que ejecuta
-cada intent contra el Tool Layer ya construido en fases anteriores, sin
-duplicar lógica de negocio. El guion "vendí 3 cafés → confirmar →
-queda registrado → ¿cuánto vendí hoy? refleja el cambio" ya funciona de
-punta a punta enviando el JSON del intent a mano — el mismo formato que
-producirá el LLM en la Fase 8, que es lo único que falta conectar.
+**Fase 8 — LLM y tool calling real.** El asistente ya entiende lenguaje
+natural: `POST /api/assistant/chat/` arma el prompt, llama al
+`LLMProvider` configurado, valida la salida contra el mismo contrato de
+intents de la Fase 7 y la propone (con confirmación obligatoria para
+toda mutación — el LLM nunca ejecuta nada por sí mismo). El proveedor de
+producción es self-hosted (`ollama`, sin ejecutar aún en este entorno
+sin GPU); para pruebas de desarrollo existe una excepción documentada y
+acotada (`deepseek_dev`, ver `docs/DECISIONS.md` ADR-010), verificable
+con un job manual de GitHub Actions. El guion completo "Vendí 3 cafés a
+$2.500 → confirmar → queda registrado" ya se probó de punta a punta con
+tráfico HTTP real contra un servidor de prueba.
 
 No avanzamos de fase sin que la anterior esté probada y aprobada.
 

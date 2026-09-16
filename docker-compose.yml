@@ -21,6 +21,7 @@ services:
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      LLM_OLLAMA_BASE_URL: http://llm-inference:11434
     volumes:
       - ./backend:/app
     ports:
@@ -39,6 +40,23 @@ services:
     depends_on:
       - backend
 
+  # Opcional, apagado por defecto (no lo levanta `docker compose up` ni
+  # el job de CI): motor de inferencia self-hosted para el asistente
+  # (ver docs/DECISIONS.md ADR-004, docs/ROADMAP.md Fase 8). Requiere
+  # cómputo real (GPU o CPU capaz) y varios GB de disco para el modelo,
+  # que no están disponibles en todos los entornos de desarrollo.
+  #
+  # Uso: docker compose --profile llm up
+  #      docker compose exec llm-inference ollama pull qwen2.5:7b-instruct
+  llm-inference:
+    image: ollama/ollama:latest
+    profiles: ["llm"]
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+
 volumes:
   postgres_data:
   frontend_node_modules:
+  ollama_data:

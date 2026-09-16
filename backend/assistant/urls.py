@@ -13,6 +13,7 @@ urlpatterns = [
         views.MessageListCreateView.as_view(),
         name="message-list-create",
     ),
+    path("chat/", views.ChatView.as_view(), name="assistant-chat"),
     path("intents/", views.IntentProposeView.as_view(), name="intent-propose"),
     path(
         "intents/<int:pending_action_id>/confirm/",

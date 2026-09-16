@@ -5,6 +5,49 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 8 — LLM y tool calling real
+
+- `LLMProvider` (`assistant/llm_providers.py`): interfaz + tres
+  implementaciones — `OllamaLLMProvider` (producción, self-hosted, ver
+  ADR-004), `DeepSeekLLMProvider` (**solo desarrollo/pruebas**, nueva
+  decisión documentada como ADR-010: usar la API alojada de DeepSeek
+  como excepción acotada, nunca como proveedor de producción) y
+  `FakeLLMProvider` (tests, sin red ni GPU).
+- Orchestrator (`assistant/orchestrator.py`): arma el prompt (system
+  fijo + catálogo de la empresa), llama al `LLMProvider`, parsea/valida
+  el JSON de intent (con un reintento si la salida no es válida),
+  reutiliza `proponer_intent` de la Fase 7 sin cambios, y registra la
+  conversación (`Conversation`/`Message`). Defensa contra prompt
+  injection: el mensaje del usuario nunca se concatena al system
+  prompt, y cualquier clave extra que el modelo agregue a su respuesta
+  (p.ej. intentando marcar una acción como ya confirmada) se ignora —
+  toda mutación sigue pasando por la confirmación explícita del backend.
+- Endpoint `POST /api/assistant/chat/` (texto libre → intent → misma
+  máquina de confirmación de la Fase 7).
+- `docker-compose.yml`: servicio opcional `llm-inference` (Ollama) bajo
+  el perfil `llm`, apagado por defecto (no lo toca `docker compose up`
+  ni el job `compose` de CI) — requiere cómputo real, no disponible en
+  este entorno de desarrollo.
+- Verificación real de DeepSeek separada del pipeline normal: comando
+  `manage.py smoke_test_llm` + workflow manual
+  `.github/workflows/llm-check.yml` (`workflow_dispatch`, usa el
+  secreto `DEEPSEEK_API_KEY` del repositorio) — nunca se ejecuta
+  automáticamente en cada push.
+- 15 tests nuevos (132 en total): unit del Orchestrator (interpretación
+  correcta, reintento ante JSON inválido, bloque markdown tolerado,
+  intent `no_entendido`, registro de conversación) y un bloque
+  específico de **prompt injection** (mensajes que intentan saltarse la
+  confirmación, o una respuesta de LLM con claves falsificadas
+  simulando confirmación, nunca ejecutan nada sin pasar por el flujo
+  normal) e integración del endpoint de chat.
+- Verificado localmente: suite completa en verde, sin cambios de
+  esquema, y un recorrido manual con tráfico HTTP real (no solo mocks en
+  Python): un servidor local que imita el formato de la API de Ollama,
+  para probar de verdad el cliente HTTP de `OllamaLLMProvider` — "Vendí
+  3 cafés a 2500" por HTTP → propuesta → confirmación → venta
+  registrada → reflejada en `/api/sales/summary/`.
+- Sin captura de documentos todavía (eso es Fase 9 en adelante).
+
 ### Fase 7 — Capa de herramientas para el asistente (sin LLM)
 
 - Modelos `Conversation`, `Message` y **`PendingAction`** (nueva

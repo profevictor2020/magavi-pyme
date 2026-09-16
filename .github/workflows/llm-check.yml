@@ -1,0 +1,55 @@
+name: LLM real check (manual)
+
+# Nunca se dispara solo (sin `push`/`pull_request`): hace una llamada de
+# red real a un proveedor de LLM externo, solo para desarrollo (ver
+# docs/DECISIONS.md ADR-010). Se activa a mano desde la pestaña Actions
+# ("Run workflow"). Requiere el secreto DEEPSEEK_API_KEY configurado en
+# este repositorio (Settings -> Secrets and variables -> Actions).
+on:
+  workflow_dispatch:
+
+jobs:
+  deepseek-smoke-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: magavi
+          POSTGRES_USER: magavi
+          POSTGRES_PASSWORD: magavi_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U magavi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: magavi
+      POSTGRES_USER: magavi
+      POSTGRES_PASSWORD: magavi_test_password
+      DJANGO_SECRET_KEY: ci-test-secret-key-with-enough-entropy-for-hs256-please
+      LLM_PROVIDER: deepseek_dev
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: python manage.py migrate --noinput
+      - name: Verificar que el secreto está configurado
+        run: |
+          if [ -z "$DEEPSEEK_API_KEY" ]; then
+            echo "Falta el secreto DEEPSEEK_API_KEY en este repositorio (Settings > Secrets and variables > Actions)." >&2
+            exit 1
+          fi
+      - run: python manage.py smoke_test_llm

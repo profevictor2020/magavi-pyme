@@ -153,3 +153,14 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
 }
+
+# Asistente / IA (ver docs/ARCHITECTURE.md #3.5, docs/DECISIONS.md
+# ADR-004 y ADR-010). "ollama" es el proveedor de producción
+# (self-hosted). "deepseek_dev" es una excepción documentada SOLO para
+# desarrollo/pruebas: envía mensajes a un proveedor externo, nunca debe
+# usarse en producción. "fake" es para tests automáticos.
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
+LLM_OLLAMA_BASE_URL = os.environ.get("LLM_OLLAMA_BASE_URL", "http://llm-inference:11434")
+LLM_OLLAMA_MODEL = os.environ.get("LLM_OLLAMA_MODEL", "qwen2.5:7b-instruct")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")

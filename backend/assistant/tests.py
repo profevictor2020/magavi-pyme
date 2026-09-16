@@ -1,4 +1,6 @@
+import json
 from decimal import Decimal
+from unittest import mock
 
 from django.urls import reverse
 from rest_framework import status
@@ -11,7 +13,8 @@ from companies.factories import CompanyFactory, CompanyUserFactory
 from companies.models import CompanyUser
 from sales.models import Sale
 
-from .models import PendingAction
+from .llm_providers import FakeLLMProvider
+from .models import Conversation, PendingAction
 
 COMPANY_HEADER = "HTTP_X_COMPANY_ID"
 
@@ -228,3 +231,110 @@ class IntentIsolationTests(APITestCase):
             **{COMPANY_HEADER: str(self.company_a.id)},
         )
         self.assertEqual(confirm_from_a.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ChatViewTests(APITestCase):
+    """Integration del endpoint de chat en lenguaje natural (Fase 8),
+    con un LLMProvider falso inyectado vía mock — sin GPU ni proveedor
+    externo real (ver docs/ROADMAP.md Fase 8).
+    """
+
+    def setUp(self):
+        self.user = UserFactory()
+        self.company = CompanyFactory()
+        CompanyUserFactory(company=self.company, user=self.user, role=CompanyUser.Role.OWNER)
+        self.client.force_authenticate(self.user)
+        self.headers = {COMPANY_HEADER: str(self.company.id)}
+        self.product = ProductFactory(
+            company=self.company, default_price=Decimal("2500.00"), current_stock=Decimal("10")
+        )
+
+    def _mock_llm(self, respuestas):
+        fake = FakeLLMProvider(respuestas)
+        return mock.patch("assistant.orchestrator.get_llm_provider", return_value=fake), fake
+
+    def test_chat_crea_conversacion_y_propuesta(self):
+        raw = json.dumps(
+            {
+                "intent": "crear_venta",
+                "parameters": {"items": [{"product_id": self.product.id, "quantity": "3"}]},
+            }
+        )
+        patcher, _fake = self._mock_llm([raw])
+
+        with patcher:
+            response = self.client.post(
+                reverse("assistant-chat"),
+                {"message": "Vendí 3 cafés"},
+                format="json",
+                **self.headers,
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "pending_confirmation")
+        conversation_id = response.data["conversation_id"]
+        self.assertTrue(Conversation.objects.for_company(self.company).filter(pk=conversation_id).exists())
+
+        pending_id = response.data["pending_action_id"]
+        confirm = self.client.post(
+            reverse("intent-confirm", kwargs={"pending_action_id": pending_id}), **self.headers
+        )
+        self.assertEqual(confirm.status_code, status.HTTP_200_OK)
+        self.assertEqual(Sale.objects.for_company(self.company).count(), 1)
+
+    def test_chat_continua_una_conversacion_existente(self):
+        conv_response = self.client.post(
+            reverse("conversation-list-create"), {}, format="json", **self.headers
+        )
+        conversation_id = conv_response.data["id"]
+
+        respuesta = json.dumps({"intent": "consultar_stock_bajo", "parameters": {}})
+        patcher, _fake = self._mock_llm([respuesta])
+
+        with patcher:
+            response = self.client.post(
+                reverse("assistant-chat"),
+                {"message": "¿algo con poco stock?", "conversation_id": conversation_id},
+                format="json",
+                **self.headers,
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["conversation_id"], conversation_id)
+        conversation = Conversation.objects.for_company(self.company).get(pk=conversation_id)
+        self.assertEqual(conversation.messages.count(), 2)
+
+    def test_chat_con_conversacion_ajena_devuelve_404(self):
+        other_company = CompanyFactory()
+        other_user = UserFactory()
+        CompanyUserFactory(company=other_company, user=other_user, role=CompanyUser.Role.OWNER)
+        other_client = APIClient()
+        other_client.force_authenticate(other_user)
+        foreign_conv = other_client.post(
+            reverse("conversation-list-create"),
+            {},
+            format="json",
+            **{COMPANY_HEADER: str(other_company.id)},
+        )
+
+        response = self.client.post(
+            reverse("assistant-chat"),
+            {"message": "hola", "conversation_id": foreign_conv.data["id"]},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_chat_mensaje_ambiguo_pide_aclaracion(self):
+        patcher, _fake = self._mock_llm(
+            [json.dumps({"intent": "no_entendido", "parameters": {"motivo": "falta la cantidad"}})]
+        )
+
+        with patcher:
+            response = self.client.post(
+                reverse("assistant-chat"), {"message": "vendí cafés"}, format="json", **self.headers
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "no_entendido")

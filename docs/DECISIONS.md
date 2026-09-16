@@ -251,3 +251,51 @@ necesite permitir stock negativo (p.ej. pre-venta), se puede agregar como
 una opción explícita por producto o por empresa — no como comportamiento
 por defecto. Esta misma regla la heredan `crear_venta` (Fase 4) y
 `registrar_compra` (Fase 5), que reutilizan `ajustar_inventario`.
+
+---
+
+## ADR-010 — Proveedor LLM externo (DeepSeek) SOLO para desarrollo y pruebas
+
+**Contexto:** en Fase 8 se necesita validar el Orchestrator (armado de
+prompt, parseo de intent, reintentos, defensa contra prompt injection)
+contra un modelo real, no solo contra el `FakeLLMProvider` usado en los
+tests automáticos. El entorno de desarrollo de esta fase no tiene GPU ni
+acceso a Docker Hub (bloqueado por política de red — ver limitación
+documentada en la Fase 1), por lo que no es posible autoalojar Ollama/vLLM
+ahí. Tampoco es razonable hacerlo en el runner de CI de cada push: bajar
+varios GB de pesos de modelo y correr inferencia en CPU en cada commit
+haría el pipeline inviablemente lento.
+
+**Decisión:** se agrega `DeepSeekLLMProvider` (`assistant/llm_providers.py`),
+un adaptador para la API alojada de DeepSeek (compatible con formato
+OpenAI), activable solo con `LLM_PROVIDER=deepseek_dev` +
+`DEEPSEEK_API_KEY`. **Nunca es el valor por defecto**: `LLM_PROVIDER`
+por defecto sigue siendo `ollama` (self-hosted, ADR-004). El uso de
+DeepSeek se limita a pruebas de desarrollo con datos sintéticos, nunca a
+producción ni a datos reales de una empresa. Cuando se necesite una
+verificación real contra este proveedor, se ejecuta como job manual de
+GitHub Actions (`workflow_dispatch`, con la API key como secreto del
+repositorio), nunca desde este entorno de desarrollo (que además tiene
+bloqueada la salida a `api.deepseek.com` por la misma política de red
+que bloquea Docker Hub).
+
+**Por qué esto no contradice el requisito de IA privada:** el requisito
+central (`docs/PRODUCT.md` §5, `docs/SECURITY.md`) es que **producción**
+no dependa de un proveedor externo — no que el equipo nunca pueda usar
+uno para probar código durante el desarrollo. La arquitectura (ADR-003:
+contrato de intención propio, no acoplado a un proveedor) es precisamente
+lo que hace esto seguro: cambiar de `deepseek_dev` a `ollama` es cambiar
+una variable de entorno, no reescribir el Orchestrator.
+
+**Alternativas consideradas:** usar únicamente `FakeLLMProvider` hasta
+tener infraestructura real para Ollama (más conservador, pero deja sin
+validar cómo se comporta el Orchestrator ante la variabilidad real de un
+modelo); instalar un modelo pequeño (~0.5B) nativo sin Docker (descartado
+por riesgo de espacio en disco fijo del entorno y porque un modelo tan
+chico es poco representativo para evaluar confiabilidad de salida JSON).
+
+**Consecuencias:** queda una dependencia de desarrollo (`requests` +
+`DeepSeekLLMProvider`) que no se usa en producción. Se documenta aquí
+explícitamente para que nadie la active por defecto sin darse cuenta, y
+para que quede claro que es una excepción acotada, no un cambio de
+rumbo de ADR-004.

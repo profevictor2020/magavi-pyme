@@ -95,13 +95,38 @@ vacía hasta la Fase 9.
   Intents soportados: `crear_venta`, `registrar_compra`,
   `ajustar_inventario` (mutantes, requieren confirmación) y
   `consultar_ventas`, `consultar_stock_bajo` (de solo lectura, se
-  ejecutan de inmediato). Sin LLM todavía (Fase 7): el intent se manda
-  ya armado, tal como lo produciría el LLM en la Fase 8.
+  ejecutan de inmediato).
 - `POST /api/assistant/intents/<id>/confirm/` — ejecuta de verdad una
   propuesta pendiente (revalidándola por completo primero — el estado
   pudo cambiar desde que se propuso).
 - `POST /api/assistant/intents/<id>/cancel/` — cancela una propuesta
   pendiente.
+- `POST /api/assistant/chat/` —
+  `{"message": "Vendí 3 cafés a 2500", "conversation_id": opcional}`.
+  Punto de entrada en lenguaje natural (Fase 8): el Orchestrator
+  (`assistant/orchestrator.py`) arma el prompt, llama al `LLMProvider`
+  configurado (`LLM_PROVIDER`: `ollama` en producción, `deepseek_dev`
+  solo para desarrollo — ver `docs/DECISIONS.md` ADR-004/ADR-010),
+  valida la salida y la propone igual que `/api/assistant/intents/`
+  — toda mutación sigue requiriendo confirmación explícita, sin
+  excepción para el LLM. Si no logra interpretar el mensaje, responde
+  pidiendo aclaración en vez de fallar.
 
 Todos los endpoints de negocio requieren el header `X-Company-Id` con la
 empresa activa; ver `core/tenancy.py`.
+
+## LLM del asistente
+
+- `LLM_PROVIDER=ollama` (default): apunta a un Ollama self-hosted
+  (`LLM_OLLAMA_BASE_URL`, `LLM_OLLAMA_MODEL`). Servicio opcional en
+  `docker-compose.yml` bajo el perfil `llm` (`docker compose --profile
+  llm up`), apagado por defecto — requiere cómputo real.
+- `LLM_PROVIDER=fake`: usado por los tests automáticos
+  (`assistant/llm_providers.py::FakeLLMProvider`), sin red ni GPU.
+- `LLM_PROVIDER=deepseek_dev` + `DEEPSEEK_API_KEY`: **solo para
+  desarrollo/pruebas** (ver `docs/DECISIONS.md` ADR-010) — nunca en
+  producción. Se verifica con un job manual de GitHub Actions
+  (`.github/workflows/llm-check.yml`, disparado a mano desde la pestaña
+  Actions), usando el secreto `DEEPSEEK_API_KEY` del repositorio — no
+  desde el entorno de desarrollo local, que tiene bloqueada esa salida
+  de red.

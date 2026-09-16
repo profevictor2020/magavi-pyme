@@ -15,7 +15,13 @@ from sales.models import Sale
 from sales.serializers import SaleSerializer
 
 from .models import Conversation
-from .serializers import ConversationSerializer, IntentEnvelopeSerializer, MessageSerializer
+from .orchestrator import interpretar_y_proponer
+from .serializers import (
+    ChatMessageSerializer,
+    ConversationSerializer,
+    IntentEnvelopeSerializer,
+    MessageSerializer,
+)
 from .services import cancelar_intent, confirmar_intent, proponer_intent
 
 # Los intents mutantes devuelven la instancia real creada por el Tool
@@ -135,6 +141,47 @@ class IntentConfirmView(APIView):
             raise _as_drf_validation_error(exc) from exc
 
         return Response({"status": "confirmed", "result": _serialize_result(resultado)})
+
+
+class ChatView(APIView):
+    """POST {"message": "Vendí 3 cafés a 2500", "conversation_id": opcional}.
+
+    Punto de entrada del asistente en lenguaje natural (ver
+    docs/ROADMAP.md Fase 8): traduce el mensaje a un intent vía el LLM
+    configurado y lo propone igual que /api/assistant/intents/ (Fase 7)
+    — toda mutación sigue requiriendo confirmación explícita, el LLM
+    nunca ejecuta nada directamente.
+    """
+
+    def post(self, request):
+        company = get_current_company(request)
+        serializer = ChatMessageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        conversation_id = serializer.validated_data.get("conversation_id")
+        if conversation_id is not None:
+            conversation = (
+                Conversation.objects.for_company(company)
+                .filter(pk=conversation_id, user=request.user)
+                .first()
+            )
+            if conversation is None:
+                return Response(
+                    {"detail": "Conversación no encontrada."}, status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            conversation = Conversation.objects.create(company=company, user=request.user)
+
+        resultado = interpretar_y_proponer(
+            company=company,
+            user=request.user,
+            mensaje=serializer.validated_data["message"],
+            conversation=conversation,
+        )
+
+        Conversation.objects.filter(pk=conversation.pk).update(last_message_at=timezone.now())
+
+        return Response({"conversation_id": conversation.id, **resultado})
 
 
 class IntentCancelView(APIView):

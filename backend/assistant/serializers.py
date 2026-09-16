@@ -39,3 +39,8 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = ["id", "role", "content", "structured_intent", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+
+class ChatMessageSerializer(serializers.Serializer):
+    message = serializers.CharField(max_length=2000)
+    conversation_id = serializers.IntegerField(required=False, allow_null=True)
