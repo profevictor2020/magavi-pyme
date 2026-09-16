@@ -1,0 +1,47 @@
+export function formatCLP(amount: string | number | null | undefined): string {
+  if (amount === null || amount === undefined) return '—'
+  const value = typeof amount === 'string' ? Number(amount) : amount
+  if (Number.isNaN(value)) return String(amount)
+  return new Intl.NumberFormat('es-CL', {
+    style: 'currency',
+    currency: 'CLP',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+export function formatDateTime(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short' }).format(
+      new Date(iso),
+    )
+  } catch {
+    return iso
+  }
+}
+
+const INTENT_LABELS: Record<string, string> = {
+  crear_venta: 'Registrar venta',
+  registrar_compra: 'Registrar compra',
+  ajustar_inventario: 'Ajustar inventario',
+  consultar_ventas: 'Consultar ventas',
+  consultar_stock_bajo: 'Consultar stock bajo',
+}
+
+export function intentLabel(name: string): string {
+  return INTENT_LABELS[name] ?? name
+}
+
+const PARAM_LABELS: Record<string, string> = {
+  product_id: 'Producto (ID)',
+  quantity: 'Cantidad',
+  unit_price: 'Precio unitario',
+  unit_cost: 'Costo unitario',
+  customer_name: 'Cliente',
+  supplier_name: 'Proveedor',
+  cantidad: 'Cantidad',
+  motivo: 'Motivo',
+}
+
+export function paramLabel(key: string): string {
+  return PARAM_LABELS[key] ?? key
+}

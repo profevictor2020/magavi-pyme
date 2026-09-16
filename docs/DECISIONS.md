@@ -339,3 +339,85 @@ se revisita esta decisión reemplazando `TesseractOCRProvider` por un
 adaptador `PaddleOCRProvider`/`DocTROCRProvider` que implemente la misma
 interfaz `OCRProvider` — el resto del sistema (Celery task, estructuración
 vía LLM, flujo de confirmación) no necesita cambiar.
+
+---
+
+## ADR-012 — Stack de frontend para la Fase 10: React Router, CSS a mano,
+Context de React, tokens en localStorage, Service Worker escrito a mano
+
+**Contexto:** hasta la Fase 9 el frontend era solo el scaffold de Vite +
+React (una pantalla placeholder). La Fase 10 requiere construir la PWA
+real completa: pantallas de auth/empresa, el chat como pantalla
+principal, las pantallas tradicionales de respaldo (productos, ventas,
+compras, documentos, caja) y la instalabilidad (manifest + Service
+Worker) — ver `docs/ARCHITECTURE.md` #3.1 y `docs/ROADMAP.md` Fase 10.
+Había que decidir varias piezas de stack antes de empezar a programar.
+
+**Decisiones tomadas (todas de bajo riesgo/reversibles, no ameritaban
+pausar a discutir con el usuario como sí lo ameritó el proveedor de LLM
+en la Fase 8):**
+
+- **Enrutamiento:** `react-router-dom` (estándar de facto, sin
+  alternativa mejor para una SPA de este tamaño).
+- **Estilos:** CSS a mano (variables CSS en `:root` para colores/espaciado,
+  clases utilitarias simples), **no** un framework de componentes
+  (Tailwind/MUI/etc.). Mantiene el bundle chico y cada estilo es
+  auditable a simple vista, coherente con el resto del proyecto
+  (preferir simplicidad y pocas dependencias sobre abstracciones).
+- **Estado de sesión/empresa:** dos React Context (`AuthContext`,
+  `CompanyContext`) en vez de una librería de estado global — el estado
+  compartido real (usuario, empresa activa) es chico y no justifica
+  Redux/Zustand/etc.
+- **Tokens JWT en `localStorage`** (`api/tokenStore.ts`): más simple de
+  implementar que cookies `httpOnly` con el backend actual (que no las
+  emite). **Tradeoff aceptado conscientemente:** un XSS en la SPA podría
+  robar el token, algo que cookies `httpOnly` mitigarían. Para el MVP,
+  con las defensas ya existentes (CSP básica, sin `dangerouslySetInnerHTML`
+  en ningún componente, React escapa por defecto), se acepta el riesgo;
+  si en producción real se requiere mayor garantía, la migración a
+  cookies `httpOnly` + `SameSite` requiere cambios en `accounts/views.py`
+  y queda documentada aquí como mejora futura, no como bloqueante del MVP.
+- **Empresa activa por request:** en vez de depender del valor guardado
+  en `localStorage` en el momento del fetch, cada función de
+  `api/endpoints.ts` recibe `companyId` explícito desde
+  `CompanyContext`. Se detectó que depender del valor persistido
+  introducía una condición de carrera real entre el efecto que persiste
+  la selección y el efecto de la página que dispara el fetch (el orden
+  de ejecución de `useEffect` entre un componente padre y sus hijos no
+  está garantizado a favor del padre) — pasar el id a mano lo evita de
+  raíz.
+- **Service Worker escrito a mano** (`public/sw.js`), no
+  `vite-plugin-pwa`/Workbox: solo cachea el "shell" (HTML/JS/CSS, vía
+  stale-while-revalidate para no depender de conocer nombres de archivo
+  hasheados de antemano) y **nunca intercepta `/api/` ni `/media/`**, en
+  línea con `docs/ARCHITECTURE.md` #3.1 ("no cache de datos de negocio
+  sensibles por defecto"). Un archivo de ~40 líneas es más fácil de
+  auditar para ese requisito de seguridad que una configuración de
+  Workbox con varias estrategias de caché.
+- **Cámara:** `<input type="file" accept="image/*" capture="environment">`
+  (tal como especifica `docs/ARCHITECTURE.md` #3.1), sin usar
+  `MediaDevices.getUserMedia` — más simple, funciona en todos los
+  navegadores móviles relevantes, y reutiliza el mismo input de subida
+  de archivo ya validado en el backend (Fase 9).
+- **Tests:** Vitest + Testing Library para lógica/componentes clave
+  (cliente HTTP con refresh de token, `AuthContext`, el flujo completo
+  de proponer/confirmar/cancelar del `ChatPage`) — no un framework de
+  componentes visuales nuevo, para no sumar otra herramienta al pipeline
+  de CI.
+
+**Bug real encontrado durante la verificación manual en navegador (no
+detectable con `curl`, que no aplica CORS):** `django-cors-headers` no
+incluye `X-Company-Id` en su lista default de headers permitidos, así
+que el navegador bloqueaba en el preflight cualquier request autenticada
+del frontend a un endpoint de negocio — las pruebas manuales de fases
+anteriores usaron siempre `curl`, que ignora CORS por completo, así que
+esto nunca se había detectado. Corregido agregando `CORS_ALLOW_HEADERS`
+explícito en `backend/config/settings.py` (los headers default de
+`corsheaders` más `x-company-id`).
+
+**Consecuencias:** el frontend queda con dependencias mínimas
+(`react-router-dom` como única dependencia de producción nueva) y sin
+ninguna decisión de este ADR que sea difícil de revertir después si se
+justifica (p. ej. migrar a `vite-plugin-pwa` si el Service Worker a mano
+se vuelve difícil de mantener, o a cookies `httpOnly` si se necesita
+mayor garantía contra XSS).

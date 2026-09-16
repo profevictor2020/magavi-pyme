@@ -9,6 +9,8 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from corsheaders.defaults import default_headers
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -33,6 +35,11 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CORS_ALLOWED_ORIGINS = env_list(
     "DJANGO_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
 )
+# El default de django-cors-headers no incluye headers custom: sin esto,
+# el navegador bloquea en el preflight cualquier request del frontend que
+# lleve X-Company-Id (ver core/tenancy.py) — CORS no se ejerce con curl,
+# así que esto solo se detecta probando contra un navegador real.
+CORS_ALLOW_HEADERS = [*default_headers, "x-company-id"]
 
 
 INSTALLED_APPS = [

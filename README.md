@@ -9,6 +9,25 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
+**Fase 10 — PWA mobile-first y UX final.** El frontend dejó de ser un
+placeholder: ahora es una PWA instalable, de una sola columna, con el
+**chat como pantalla principal** (`ChatPage`) — enviar un mensaje como
+"Vendí 3 cafés a 2500" muestra la propuesta del asistente con botones de
+confirmar/cancelar, y el resultado registrado, todo sin salir del chat.
+Las pantallas tradicionales (productos, ventas, compras, documentos,
+caja) están pulidas para uso con una mano en celular, con navegación
+inferior fija. La captura de documentos ahora tiene UI real: fotografiar
+con la cámara del celular (`<input capture>`), revisar/corregir los
+datos extraídos y confirmar. Manifest + Service Worker (cachea solo el
+"shell", nunca datos de negocio) hacen la app instalable. Todo el
+recorrido completo (registro → crear empresa → crear producto → vender
+por chat → confirmar → ver caja actualizada → fotografiar una factura →
+confirmar como compra) se probó de punta a punta en un navegador real
+(Chromium headless, viewport móvil), no solo con `curl` — lo que además
+encontró y permitió corregir un bug real de CORS (`X-Company-Id` no
+estaba permitido, ver `docs/DECISIONS.md` ADR-012) que ninguna prueba
+anterior vía `curl` podía detectar.
+
 **Fase 9 — Captura de documentos y OCR.** Ya se puede fotografiar/subir
 una boleta o factura (`POST /api/documents/`): un worker de Celery
 extrae el texto con OCR real (Tesseract, 100% local — ver

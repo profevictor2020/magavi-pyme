@@ -5,6 +5,64 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 10 — PWA mobile-first y UX final
+
+- Frontend real (antes solo el placeholder de la Fase 1): SPA con
+  `react-router-dom`, CSS mobile-first escrito a mano (sin framework de
+  componentes), dos React Context (`AuthContext`, `CompanyContext`) —
+  ver la justificación completa de cada decisión de stack en
+  `docs/DECISIONS.md` ADR-012.
+- `src/api/client.ts`: cliente HTTP con reintento automático de refresh
+  de token JWT ante un 401 (y logout automático si el refresh también
+  falla), y `src/api/endpoints.ts` con funciones tipadas por recurso que
+  reciben la empresa activa **explícita** como parámetro (en vez de
+  leerla implícitamente de `localStorage` al momento del fetch, que
+  tenía una condición de carrera real entre efectos de React).
+- Pantallas de auth y empresa: `LoginPage`, `RegisterPage`, `CompanyPage`
+  (crear la primera empresa o cambiar entre las existentes).
+- **`ChatPage`**, la pantalla principal de la app (ver
+  `docs/ARCHITECTURE.md` #3.1): conversación con el asistente, cada
+  propuesta de intent mutante se muestra como una tarjeta con botones
+  "Confirmar"/"Cancelar" (nunca se ejecuta nada sin ese paso explícito),
+  y el resultado (venta/compra/ajuste registrado, o una consulta de solo
+  lectura) se renderiza de forma legible (`ResultView`), no como JSON
+  crudo.
+- Pantallas tradicionales de respaldo, pulidas para uso con una mano en
+  celular: `ProductsPage` (con ajuste de stock inline), `SalesPage`,
+  `PurchasesPage`, `CashboxPage` (dashboard de caja/ventas/stock bajo).
+- `DocumentsPage`/`DocumentDetailPage`: fotografiar/subir un documento
+  (`<input capture="environment">`, reutilizando la validación de
+  archivos de la Fase 9), ver en vivo las transiciones de estado
+  (`uploaded → processing → needs_review`), revisar y **corregir** los
+  datos extraídos antes de confirmar, o rechazar sin registrar nada.
+- PWA instalable: `public/manifest.webmanifest`, íconos generados a
+  partir del favicon del proyecto, y un Service Worker escrito a mano
+  (`public/sw.js`, ~40 líneas) que cachea solo el "shell" de la app
+  (stale-while-revalidate) y **nunca intercepta `/api/` ni `/media/`**
+  — ver `docs/ARCHITECTURE.md` #3.1 ("no cache de datos de negocio
+  sensibles por defecto"). Se registra solo en producción, nunca en
+  `npm run dev`.
+- 11 tests nuevos con Vitest + Testing Library: el cliente HTTP (adjunta
+  headers correctos, reintenta tras refrescar el token, limpia la sesión
+  si el refresh también falla, extrae mensajes de error de las distintas
+  formas de `ValidationError` de DRF), `AuthContext` (login/logout), y
+  el flujo completo de `ChatPage` (proponer → confirmar, proponer →
+  cancelar, mensaje no entendido). Sumados a `npm run test` en CI.
+- **Bug real encontrado y corregido durante la verificación manual en
+  navegador** (no detectable con `curl`, que ignora CORS por completo):
+  `django-cors-headers` no incluía `X-Company-Id` en su lista default de
+  headers permitidos, así que el navegador bloqueaba en el preflight
+  cualquier request autenticada del frontend a un endpoint de negocio.
+  Corregido con `CORS_ALLOW_HEADERS` explícito en
+  `backend/config/settings.py`.
+- Verificado de punta a punta en un navegador real (Chromium headless,
+  viewport móvil 390×844, no solo mocks/tests unitarios): registro →
+  crear empresa → crear producto → "Vendí 3 cafés a 2500" por chat →
+  confirmar → venta reflejada en Ventas y en el dashboard de Caja →
+  fotografiar una factura sintética → OCR real (Tesseract) →
+  estructuración → revisar/corregir → confirmar → compra registrada,
+  sin ningún error de consola del navegador.
+
 ### Fase 9 — Captura de documentos y OCR
 
 - Nueva app `documents`: modelos `Document` (`status`:
