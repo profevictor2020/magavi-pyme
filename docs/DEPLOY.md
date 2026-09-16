@@ -13,11 +13,33 @@ los resume).
    verificar identidad, no cobra en el tier Always Free).
 2. **Compute → Instances → Create Instance**:
    - Image: Ubuntu 22.04 o 24.04.
-   - Shape: `VM.Standard.A1.Flex` (ARM, Always Free) — 4 OCPU / 24GB RAM
-     (el máximo gratis).
-   - SSH keys: generar un par nuevo, descargar la llave privada.
-   - Confirmar que "Assign a public IPv4 address" esté marcado.
+   - Shape: buscar (puede estar bajo un filtro de arquitectura "Arm",
+     no junto a los shapes x86) `VM.Standard.A1.Flex` (Always Free) —
+     4 OCPU / 24GB RAM (el máximo gratis).
+   - Networking: "Create new virtual cloud network" + "Create new
+     public subnet" si es la primera instancia de la cuenta (todavía no
+     hay ninguna VCN creada) — Oracle configura solo el resto. Confirmar
+     que la IP pública quede en automático.
+   - SSH keys: "Generate a key pair for me" y **descargar la llave
+     privada antes de crear la instancia** — no se puede recuperar
+     después.
 3. Anotar la **IP pública** de la instancia una vez que quede "Running".
+
+**Si aparece "Out of capacity for shape VM.Standard.A1.Flex"**: es un
+problema común y no indica ningún error de configuración — la forma ARM
+gratuita es muy solicitada y la disponibilidad varía constantemente por
+región. Opciones, de más a menos simple:
+
+- Reducir a 2 OCPU / 12GB (editar el shape antes de reintentar) — a
+  veces hay cupo para un tamaño menor aunque no para el máximo. Con
+  12GB alcanza igual para todo el stack, usando `qwen2.5:3b-instruct`
+  en vez de `qwen2.5:7b-instruct` (ver `.env.prod.example`).
+- Reintentar más tarde — la capacidad se libera y ocupa constantemente.
+- Suscribir la cuenta a otra región (**Governance & Administration →
+  Region Management**) y crear la instancia ahí — solo funciona si la
+  cuenta ya tiene cupo para regiones adicionales; una cuenta recién
+  creada puede estar limitada a su home region hasta que Oracle termine
+  de aprovisionarla del todo (usualmente unas horas a 1-2 días).
 
 ## 2. Firewall: dos capas, hay que abrir ambas
 
