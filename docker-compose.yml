@@ -15,6 +15,11 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
   backend:
     build: ./backend
     env_file: .env
@@ -22,6 +27,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       LLM_OLLAMA_BASE_URL: http://llm-inference:11434
+      CELERY_BROKER_URL: redis://redis:6379/0
     volumes:
       - ./backend:/app
     ports:
@@ -29,6 +35,28 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Procesa OCR + estructuración de documentos en background (ver
+  # docs/DECISIONS.md ADR-007, docs/ROADMAP.md Fase 9). Comparte imagen
+  # y código con `backend` vía el mismo bind mount, así que ve los
+  # archivos que `backend` sube a MEDIA_ROOT sin configuración extra.
+  worker:
+    build: ./backend
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    command: celery -A config worker --loglevel=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   frontend:
     build: ./frontend

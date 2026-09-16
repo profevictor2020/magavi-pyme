@@ -9,6 +9,19 @@ app (texto o foto de documentos), no llenando formularios.
 
 ## Estado actual
 
+**Fase 9 — Captura de documentos y OCR.** Ya se puede fotografiar/subir
+una boleta o factura (`POST /api/documents/`): un worker de Celery
+extrae el texto con OCR real (Tesseract, 100% local — ver
+`docs/DECISIONS.md` ADR-011) y lo estructura reutilizando el mismo LLM
+del asistente (proveedor, ítems, total). El usuario revisa y corrige los
+datos propuestos y recién ahí confirma (`POST
+/api/documents/<id>/confirm/`), lo que registra la compra/venta real
+reutilizando el Tool Layer existente (`registrar_compra`/`crear_venta`)
+— nunca se registra nada solo por subir o procesar un documento. El
+pipeline completo (subida → OCR real → estructuración → confirmación →
+stock y caja actualizados) se probó de punta a punta con infraestructura
+real (Redis + Celery + Tesseract), no solo con mocks.
+
 **Fase 8 — LLM y tool calling real.** El asistente ya entiende lenguaje
 natural: `POST /api/assistant/chat/` arma el prompt, llama al
 `LLMProvider` configurado, valida la salida contra el mismo contrato de
@@ -17,9 +30,7 @@ toda mutación — el LLM nunca ejecuta nada por sí mismo). El proveedor de
 producción es self-hosted (`ollama`, sin ejecutar aún en este entorno
 sin GPU); para pruebas de desarrollo existe una excepción documentada y
 acotada (`deepseek_dev`, ver `docs/DECISIONS.md` ADR-010), verificable
-con un job manual de GitHub Actions. El guion completo "Vendí 3 cafés a
-$2.500 → confirmar → queda registrado" ya se probó de punta a punta con
-tráfico HTTP real contra un servidor de prueba.
+con un job manual de GitHub Actions.
 
 No avanzamos de fase sin que la anterior esté probada y aprobada.
 

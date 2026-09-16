@@ -5,6 +5,72 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fase 9 — Captura de documentos y OCR
+
+- Nueva app `documents`: modelos `Document` (`status`:
+  `uploaded|processing|needs_review|confirmed|rejected|failed`,
+  `document_type_guess`, imagen subida a `_document_upload_path` con
+  nombre aleatorio) y `DocumentExtraction` (1-1 con `Document`:
+  `raw_ocr_text`, `structured_data` JSONB, `reviewed_by`/`reviewed_at`).
+- `OCRProvider` (`documents/ocr_providers.py`): misma arquitectura de
+  interfaz + implementaciones que `LLMProvider` — `TesseractOCRProvider`
+  (real, local, sin red — nueva decisión documentada como ADR-011: se
+  prefiere Tesseract a PaddleOCR/docTR de ADR-005 por ser instalable vía
+  `apt`, sin GPU y sin Docker) y `FakeOCRProvider` (tests).
+- `documents/structuring.py::estructurar_documento`: reutiliza el mismo
+  `LLMProvider` del asistente (Fase 8) para transformar el texto OCR
+  crudo en JSON estructurado (proveedor, ítems, total), con la misma
+  lógica de parseo/tolerancia de bloques markdown que el Orchestrator
+  (extraída a `core/json_utils.py::parse_json_object`, usada ahora por
+  ambos).
+- Procesamiento asíncrono real con Celery + Redis
+  (`documents/tasks.py::procesar_documento`): al subir un documento se
+  encola la tarea, que hace `uploaded → processing → needs_review` (o
+  `failed` si algo falla), corriendo OCR + estructuración fuera del
+  request HTTP. `CELERY_TASK_ALWAYS_EAGER=true` en tests/CI para correr
+  la tarea de forma síncrona sin necesitar un broker real. Nuevos
+  servicios `redis` y `worker` en `docker-compose.yml`.
+- Endpoints: `GET/POST /api/documents/` (listar / subir imagen,
+  `multipart/form-data`), `GET /api/documents/<id>/` (detalle +
+  extracción), `POST /api/documents/<id>/confirm/` (con los datos
+  corregidos por el usuario si hace falta, registra la compra/venta real
+  reutilizando `registrar_compra`/`crear_venta` sin duplicar lógica —
+  solo procede desde `needs_review`), `POST /api/documents/<id>/reject/`.
+  Ver `docs/SECURITY.md` #7: subir/procesar un documento nunca registra
+  nada por sí solo, siempre se necesita la confirmación explícita.
+- Validación de subida de archivos (`docs/SECURITY.md` #6): whitelist de
+  `Content-Type`, tamaño máximo configurable
+  (`DOCUMENT_MAX_UPLOAD_SIZE_BYTES`), verificación real de que el
+  archivo es una imagen válida (`PIL.Image.verify()`), límite de
+  dimensiones, nombre de archivo aleatorio (UUID, no el nombre original
+  del usuario) y remoción de metadatos EXIF (`documents/image_utils.py`)
+  antes de guardar.
+- Aislamiento multiempresa verificado para la nueva app (gate
+  obligatorio de `docs/TESTING.md` #2): un usuario no puede listar, ver,
+  confirmar ni rechazar documentos de otra empresa (siempre 404, nunca
+  403 ni 200 con datos ajenos).
+- `Dockerfile`: se agregan los paquetes de sistema `tesseract-ocr` +
+  `tesseract-ocr-spa`. CI instala los mismos paquetes vía `apt` para el
+  job de backend.
+- Tests nuevos (159 en total): validación de archivos subidos,
+  `TesseractOCRProviderTests` (OCR real sobre una imagen sintética
+  generada en el propio test, no un mock, para probar el proveedor de
+  verdad), `estructurar_documento` (respuesta válida del LLM, respuesta
+  inválida cae a estructura vacía, ítem sin match de producto queda con
+  `product_id` nulo), la tarea de Celery, y la suite de integración de
+  documentos (subida → procesamiento → confirmación → stock/caja,
+  doble confirmación rechazada, rechazo, aislamiento multiempresa).
+- Verificado manualmente de punta a punta con infraestructura real (no
+  solo mocks/eager): Redis real, un worker de Celery real corriendo en
+  segundo plano, Tesseract real vía `pytesseract` sobre una imagen
+  sintética de una "factura", y un servidor local que imita el formato
+  de la API de Ollama para la estructuración. Se observaron las
+  transiciones de estado asíncronas reales (`uploaded → processing →
+  needs_review`), y tras confirmar: la compra quedó registrada
+  (`total` correcto), el stock del producto subió de 0 a la cantidad
+  comprada, el resumen de caja reflejó el egreso, y el documento quedó
+  `confirmed` con `reviewed_by`/`reviewed_at` completos.
+
 ### Fase 8 — LLM y tool calling real
 
 - `LLMProvider` (`assistant/llm_providers.py`): interfaz + tres

@@ -299,3 +299,43 @@ chico es poco representativo para evaluar confiabilidad de salida JSON).
 explícitamente para que nadie la active por defecto sin darse cuenta, y
 para que quede claro que es una excepción acotada, no un cambio de
 rumbo de ADR-004.
+
+---
+
+## ADR-011 — OCR: Tesseract (no PaddleOCR/docTR) como implementación
+concreta del MVP
+
+**Contexto:** ADR-005 dejó abierta la elección entre PaddleOCR y docTR
+para el motor de OCR, con Tesseract descartado en ese momento por "peor
+en fotos reales con ruido/inclinación". Al implementar la Fase 9 sobre
+este entorno (sin GPU, sin acceso a Docker Hub — misma limitación de red
+documentada en la Fase 1 y en ADR-010), instalar y mantener PaddleOCR o
+docTR (ambos con dependencias pesadas de deep learning, típicamente
+distribuidos como imagen Docker o con pesos de varios cientos de MB a
+descargar) resulta desproporcionado para un MVP cuyo requisito central es
+que el usuario siempre revisa y corrige antes de confirmar (ADR-005,
+`docs/SECURITY.md` #7) — es decir, el sistema nunca depende de que el OCR
+sea perfecto.
+
+**Decisión:** usar `pytesseract` (wrapper de Tesseract OCR) como
+implementación concreta de `OCRProvider` (`documents/ocr_providers.py`,
+`TesseractOCRProvider`) para el MVP. Tesseract se instala nativamente vía
+`apt` (paquetes `tesseract-ocr` + `tesseract-ocr-spa`), sin Docker, sin
+GPU y sin ninguna llamada de red en tiempo de inferencia — cumple el
+mismo principio de IA/procesamiento privado que ADR-004, solo que aquí no
+hay siquiera una excepción que documentar: es 100% local y offline por
+diseño de la propia herramienta.
+
+**Alternativas consideradas:** PaddleOCR y docTR (ADR-005) siguen siendo
+la ruta de mejora si la precisión de Tesseract resulta insuficiente en
+pruebas con boletas/facturas reales (letra manuscrita, papel arrugado,
+mala iluminación); EasyOCR (misma familia de costo/beneficio que
+PaddleOCR/docTR, descartado por el mismo motivo).
+
+**Consecuencias:** el pipeline de Fase 9 queda validado extremo a extremo
+con OCR real (no mockeado) usando infraestructura mínima. Si en uso real
+la tasa de corrección manual por parte de los usuarios resulta muy alta,
+se revisita esta decisión reemplazando `TesseractOCRProvider` por un
+adaptador `PaddleOCRProvider`/`DocTROCRProvider` que implemente la misma
+interfaz `OCRProvider` — el resto del sistema (Celery task, estructuración
+vía LLM, flujo de confirmación) no necesita cambiar.

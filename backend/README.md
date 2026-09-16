@@ -38,9 +38,11 @@ Layer; sin endpoints todavía), `assistant` (Conversation, Message,
 PendingAction; `intents.py` registra los intents soportados y los
 ejecuta contra el Tool Layer existente; `services.py` implementa la
 máquina de confirmación `proponer_intent`/`confirmar_intent`/
-`cancelar_intent` — ver `docs/ARCHITECTURE.md` #3.4), `documents`. Ver
-`docs/ARCHITECTURE.md` para el propósito de cada una. `documents` sigue
-vacía hasta la Fase 9.
+`cancelar_intent` — ver `docs/ARCHITECTURE.md` #3.4), `documents`
+(Document, DocumentExtraction; captura de boletas/facturas por foto,
+OCR + estructuración asíncrona vía Celery, y confirmación explícita que
+reutiliza `registrar_compra`/`crear_venta` — ver más abajo). Ver
+`docs/ARCHITECTURE.md` para el propósito de cada una.
 
 ## Endpoints
 
@@ -111,6 +113,24 @@ vacía hasta la Fase 9.
   — toda mutación sigue requiriendo confirmación explícita, sin
   excepción para el LLM. Si no logra interpretar el mensaje, responde
   pidiendo aclaración en vez de fallar.
+- `GET/POST /api/documents/` — listar los documentos de la empresa /
+  subir una foto de boleta o factura (`multipart/form-data`, campo
+  `image`). La subida valida tipo de archivo, tamaño máximo, que sea una
+  imagen real (`PIL.Image.verify()`) y dimensiones máximas (ver
+  `docs/SECURITY.md` #6), y dispara de forma asíncrona (Celery)
+  `documents/tasks.py::procesar_documento`: OCR (`OCR_PROVIDER`) +
+  estructuración vía el mismo `LLMProvider` del asistente
+  (`documents/structuring.py`). El documento pasa por
+  `uploaded → processing → needs_review` (o `failed` si algo falla).
+- `GET /api/documents/<id>/` — detalle, incluye `extraction` (texto OCR
+  crudo + `structured_data` propuesta) una vez procesado.
+- `POST /api/documents/<id>/confirm/` — confirma (con los datos
+  corregidos por el usuario si hace falta) y registra de verdad la
+  compra o venta, reutilizando `registrar_compra`/`crear_venta` — nunca
+  se registra nada solo por subir/procesar un documento (ver
+  `docs/SECURITY.md` #7). Solo procede desde `needs_review`.
+- `POST /api/documents/<id>/reject/` — descarta el documento sin
+  registrar nada.
 
 Todos los endpoints de negocio requieren el header `X-Company-Id` con la
 empresa activa; ver `core/tenancy.py`.
@@ -130,3 +150,20 @@ empresa activa; ver `core/tenancy.py`.
   Actions), usando el secreto `DEEPSEEK_API_KEY` del repositorio — no
   desde el entorno de desarrollo local, que tiene bloqueada esa salida
   de red.
+
+## OCR y procesamiento asíncrono de documentos
+
+- `OCR_PROVIDER=tesseract` (default): usa Tesseract (`pytesseract`),
+  100% local y sin red en tiempo de inferencia (ver `docs/DECISIONS.md`
+  ADR-011). Requiere los paquetes de sistema `tesseract-ocr` +
+  `tesseract-ocr-spa` (ya incluidos en `Dockerfile`; instalarlos también
+  vía `apt` para desarrollo local sin Docker). `OCR_TESSERACT_LANG`
+  controla el idioma (`spa` por defecto).
+- `OCR_PROVIDER=fake`: usado por los tests automáticos
+  (`documents/ocr_providers.py::FakeOCRProvider`).
+- El procesamiento (`documents/tasks.py::procesar_documento`) corre en
+  un worker de Celery separado, con Redis como broker
+  (`CELERY_BROKER_URL`; servicios `redis` y `worker` en
+  `docker-compose.yml`). En tests/CI se usa
+  `CELERY_TASK_ALWAYS_EAGER=true` para que la tarea corra de forma
+  síncrona en el mismo proceso, sin necesitar un broker real.

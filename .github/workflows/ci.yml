@@ -28,6 +28,9 @@ jobs:
       POSTGRES_USER: magavi
       POSTGRES_PASSWORD: magavi_test_password
       DJANGO_SECRET_KEY: ci-test-secret-key-with-enough-entropy-for-hs256-please
+      # Las tareas de Celery corren en el mismo proceso, sin necesitar
+      # Redis (ver docs/DECISIONS.md ADR-007 y config/settings.py).
+      CELERY_TASK_ALWAYS_EAGER: "true"
     defaults:
       run:
         working-directory: backend
@@ -38,6 +41,8 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
+      - name: Instalar Tesseract (OCR, ver docs/DECISIONS.md ADR-011)
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-spa
       - run: pip install -r requirements-dev.txt
       - run: ruff check .
       - run: python manage.py migrate --noinput

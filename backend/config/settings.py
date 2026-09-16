@@ -133,6 +133,12 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Almacenamiento local para el MVP (ver docs/ARCHITECTURE.md #3.7); la
+# interfaz de Django (FileField) permite migrar a S3/MinIO más adelante
+# sin tocar el resto del código.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Deny-by-default (ver docs/SECURITY.md): cada vista pública debe declarar
@@ -164,3 +170,27 @@ LLM_OLLAMA_BASE_URL = os.environ.get("LLM_OLLAMA_BASE_URL", "http://llm-inferenc
 LLM_OLLAMA_MODEL = os.environ.get("LLM_OLLAMA_MODEL", "qwen2.5:7b-instruct")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+
+# Captura de documentos / OCR (ver docs/ARCHITECTURE.md #3.6,
+# docs/DECISIONS.md ADR-005 y ADR-011, docs/SECURITY.md #6).
+OCR_PROVIDER = os.environ.get("OCR_PROVIDER", "tesseract")
+OCR_TESSERACT_LANG = os.environ.get("OCR_TESSERACT_LANG", "spa")
+DOCUMENT_MAX_UPLOAD_SIZE_BYTES = int(
+    os.environ.get("DOCUMENT_MAX_UPLOAD_SIZE_BYTES", 10 * 1024 * 1024)
+)
+DOCUMENT_ALLOWED_CONTENT_TYPES = env_list(
+    "DOCUMENT_ALLOWED_CONTENT_TYPES", "image/jpeg,image/png,image/webp"
+)
+
+# Celery (ver docs/DECISIONS.md ADR-007): procesamiento async de OCR y
+# estructuración de documentos. CELERY_TASK_ALWAYS_EAGER=true hace que
+# las tareas corran en el mismo proceso, sin necesitar Redis — se usa en
+# tests y puede usarse en desarrollo sin worker levantado.
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", False)
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE

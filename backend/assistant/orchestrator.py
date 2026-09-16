@@ -14,12 +14,11 @@ en la respuesta del LLM se ignora, y toda mutación sigue pasando por la
 misma confirmación explícita de la Fase 7, sin excepción.
 """
 
-import json
-
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from catalog.models import Product
+from core.json_utils import parse_json_object
 
 from .llm_providers import get_llm_provider
 from .models import Message
@@ -74,21 +73,6 @@ def _construir_contexto_catalogo(company) -> str:
     return "Catálogo de la empresa (product_id: nombre):\n" + "\n".join(lineas)
 
 
-def _parsear_json(texto: str):
-    texto = texto.strip()
-    if texto.startswith("```"):
-        # Tolerar el caso común de un modelo que envuelve el JSON en un
-        # bloque de código pese a la instrucción de no hacerlo.
-        texto = texto.strip("`").strip()
-        if texto.lower().startswith("json"):
-            texto = texto[4:].strip()
-    try:
-        data = json.loads(texto)
-    except (json.JSONDecodeError, ValueError):
-        return None
-    return data if isinstance(data, dict) else None
-
-
 def _pedir_intent_al_llm(llm_provider, messages):
     """Hasta MAX_INTENT_ATTEMPTS intentos: si el modelo no devuelve un
     JSON con la forma esperada, se le pide corregirlo antes de rendirse.
@@ -97,7 +81,7 @@ def _pedir_intent_al_llm(llm_provider, messages):
     ultima_respuesta = ""
     for _ in range(MAX_INTENT_ATTEMPTS):
         ultima_respuesta = llm_provider.completar(messages=intento_actual)
-        parsed = _parsear_json(ultima_respuesta)
+        parsed = parse_json_object(ultima_respuesta)
         if parsed is not None and "intent" in parsed:
             return parsed, ultima_respuesta
         intento_actual = intento_actual + [
