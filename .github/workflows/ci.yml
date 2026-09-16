@@ -118,6 +118,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Instalar dependencias de Node (y el navegador de Playwright)
+      # ANTES de levantar docker compose: el contenedor `frontend` corre
+      # como root y comparte `./frontend` con el host vía bind mount —
+      # si `docker compose up` corre primero, puede dejar archivos en
+      # ./frontend con dueño root, y el `npm ci` posterior (que corre
+      # como el usuario del runner, no root) falla con EACCES al no
+      # poder escribir ahí.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - name: Instalar navegador de Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
       - name: Preparar .env
         run: cp .env.example .env
       - name: Levantar stack completo + LLM de prueba (docker compose up)
@@ -132,7 +149,7 @@ jobs:
             sleep 2
           done
           echo "El backend no respondio 200 en /api/health/" >&2
-          docker compose logs
+          docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs
           exit 1
       - name: Esperar frontend (servidor Vite responde)
         run: |
@@ -143,18 +160,8 @@ jobs:
             sleep 2
           done
           echo "El frontend no respondio en :5173" >&2
-          docker compose logs
+          docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs
           exit 1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - working-directory: frontend
-        run: npm ci
-      - name: Instalar navegador de Playwright
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
       - name: Correr el guion de demo (Playwright, viewport móvil)
         working-directory: frontend
         run: npx playwright test

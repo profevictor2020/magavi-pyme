@@ -48,6 +48,17 @@ funciona de punta a punta.
   corrigió usando los últimos dígitos (más volátiles). El mismo bug
   existía en `frontend/e2e/demo.spec.ts` y se corrigió ahí también antes
   de que llegara a CI.
+- **Bug real de CI encontrado y corregido en el primer run del job
+  `e2e`** (este sandbox no tiene Docker, así que el job nunca se pudo
+  probar localmente antes de empujarlo): `docker compose up` corría
+  antes que `npm ci`, y el contenedor `frontend` (que corre como root y
+  comparte `./frontend` con el host vía bind mount) dejaba ese
+  directorio en un estado que bloqueaba el `npm ci` posterior del
+  runner (no-root) con `EACCES`. El resto de la infraestructura
+  (Postgres, Redis, Celery, Tesseract, el LLM de prueba, el propio
+  backend) se levantó bien a la primera. Corregido invirtiendo el
+  orden: instalar dependencias de Node y el navegador de Playwright
+  antes de levantar `docker compose`.
 - Con esto, las Fases 0–12 del roadmap original del MVP quedan
   completas.
 
