@@ -32,9 +32,25 @@ def crear_producto(
     cacheada, ver catalog/models.py): se siembra vía `ajustar_inventario`,
     igual que cualquier otro movimiento de inventario, para que quede su
     propio registro en InventoryMovement.
+
+    Rechaza un nombre duplicado (ver docs/DECISIONS.md ADR-027): sin esto,
+    cada mensaje de seguimiento sobre un producto recién creado ("el
+    stock es 200", "lo vendemos a 1750") puede terminar creando un
+    producto NUEVO con el mismo nombre en vez de corregir el que ya
+    existe, si el LLM se equivoca de intent — el Tool Layer es la última
+    línea de defensa contra eso, no solo el prompt.
     """
     if sku and Product.objects.for_company(company).filter(sku=sku).exists():
         raise ValidationError(f"Ya existe un producto con el SKU {sku} en esta empresa.")
+    if (
+        Product.objects.for_company(company)
+        .filter(name__iexact=name.strip(), is_active=True)
+        .exists()
+    ):
+        raise ValidationError(
+            f"Ya existe un producto llamado '{name}' en esta empresa — "
+            "usa actualizar_producto o ajustar_inventario en vez de crear uno nuevo."
+        )
 
     with transaction.atomic():
         product = Product.objects.create(

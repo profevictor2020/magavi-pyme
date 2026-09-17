@@ -97,7 +97,18 @@ mercadería", "merma", "conteo físico") — nunca dejes "motivo" vacío ni \
 le exijas al usuario decir literalmente la palabra "motivo".
 - crear_producto: {"name": "<texto>", "unit": "<unidad|kg|lt, opcional>", \
 "default_price": "<numero opcional>", "default_cost": "<numero opcional>", \
-"initial_stock": "<numero opcional>"}
+"initial_stock": "<numero opcional>"}. ANTES de proponer este intent, \
+revisa el catálogo de abajo: si ya existe un producto con ese nombre \
+(exacto o muy parecido, sin importar mayúsculas), el usuario casi \
+siempre se refiere a completar/corregir datos de ESE producto, no a \
+crear uno nuevo — usa actualizar_producto (precio/costo/nombre/mínimo) \
+o ajustar_inventario (cantidad de stock) con su product_id en vez de \
+crear_producto. Esto es especialmente común justo después de haber \
+creado un producto en esta misma conversación y seguir dándole datos \
+en mensajes separados ("el stock de X es 200", "lo vamos a vender a \
+1750") — esos mensajes son actualizaciones del producto que se acaba \
+de crear, NUNCA una segunda creación. Usa crear_producto solo cuando el \
+nombre no aparece en el catálogo en absoluto.
 - actualizar_producto: {"product_id": <int>, "name": "<opcional>", \
 "default_price": "<opcional>", "default_cost": "<opcional>", \
 "low_stock_threshold": "<opcional>"}. Úsalo cuando el usuario quiere \

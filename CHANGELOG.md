@@ -5,6 +5,25 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Mensajes de seguimiento sobre un producto nuevo creaban duplicados
+
+Bug encontrado en vivo: se creó el producto "cuaderno", y los dos
+mensajes de seguimiento ("el stock de cuaderno es de 200", "y este
+cuaderno lo vamos a vender a 1750") — que claramente eran para
+completar datos de ESE producto — el asistente los volvió a
+interpretar como `crear_producto` en vez de `ajustar_inventario`/
+`actualizar_producto`. Resultado: tres "cuaderno" distintos en el
+catálogo, cada uno con datos parciales.
+
+Se amplió el `SYSTEM_PROMPT` para revisar el catálogo antes de
+proponer `crear_producto` y usar `actualizar_producto`/
+`ajustar_inventario` si el nombre ya existe. Pero como un prompt no es
+una garantía (el modelo repitió el error dos veces seguidas con el
+dato correcto disponible), se agregó una segunda capa real:
+`crear_producto` ahora rechaza un nombre duplicado (activo, en la
+misma empresa) directamente en el Tool Layer — igual que ya hacía con
+el SKU. Ver ADR-027 (`docs/DECISIONS.md`).
+
 ### Nuevo intent "consultar_detalle_ventas": el detalle por venta, no solo el total
 
 Bug encontrado en vivo: después de ver "Este mes: $11.400 (3 ventas)",

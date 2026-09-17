@@ -1401,3 +1401,84 @@ de datos. `listar_ventas` reutiliza `resolve_period_range` (ADR-022),
 sin lógica de fechas nueva. El frontend gana `isReceiptList` y un
 nuevo caso en `ResultView`/`describeResultForSpeech`; no se tocó
 `ReceiptLike` ni la forma que ya usan compras/ventas individuales.
+
+---
+
+## ADR-027 — `crear_producto` rechaza nombres duplicados (defensa en el Tool Layer)
+
+**Contexto:** probando en vivo, "quiero modificar el producto cuaderno"
+correctamente respondió que no existía; el usuario lo creó con
+"agreguemos el producto cuaderno" (`crear_producto`, bien). Pero los
+DOS mensajes de seguimiento — "el stock de cuaderno es de 200" y "y
+este cuaderno lo vamos a vender a 1750" — que claramente se referían a
+completar datos del "cuaderno" recién creado, el modelo los volvió a
+interpretar como `crear_producto` en vez de `ajustar_inventario`/
+`actualizar_producto` sobre el product_id existente. Resultado: TRES
+productos "cuaderno" en el catálogo (uno por mensaje), cada uno con
+datos parciales, en vez de uno solo correctamente armado. El catálogo
+SÍ incluía "cuaderno" con su product_id en el contexto de los mensajes
+siguientes (`_construir_contexto_catalogo` se reconstruye en cada
+turno) — el modelo tenía la información para no duplicar y aun así lo
+hizo.
+
+**Decisión:** dos capas, no una sola:
+1. **Prompt** (`SYSTEM_PROMPT`, `crear_producto`): instrucción
+   explícita de revisar el catálogo ANTES de proponer `crear_producto`
+   — si ya existe un producto con ese nombre (exacto o muy parecido),
+   usar `actualizar_producto`/`ajustar_inventario` sobre su
+   `product_id`, nunca crear uno nuevo; se nombra explícitamente el
+   patrón que falló ("mensajes de seguimiento sobre un producto recién
+   creado en esta misma conversación").
+2. **Tool Layer** (`catalog.services.crear_producto`): rechaza con
+   `ValidationError` si ya existe un producto ACTIVO con el mismo
+   nombre (case-insensitive, sin espacios de más) en la misma empresa
+   — mismo patrón que la validación de SKU duplicado que ya existía en
+   la misma función. Esta es la capa que de verdad importa: aunque el
+   prompt falle de nuevo (un LLM nunca da garantías del 100%), el Tool
+   Layer impide que el duplicado llegue a la base de datos. Coherente
+   con el principio ya establecido en este proyecto (ver
+   docs/ARCHITECTURE.md #3.3/#3.4): la integridad de los datos nunca
+   depende de que el LLM interprete bien, siempre hay una validación
+   real debajo.
+
+**Por qué la validación en el Tool Layer y no solo en el prompt:** un
+prompt mejor reduce la frecuencia del error, pero no lo elimina — ya
+se vio en vivo que el modelo repitió el mismo error dos veces seguidas
+en la misma conversación a pesar de tener el dato correcto en el
+contexto. Sin una validación real, el mismo bug podría repetirse con
+cualquier nombre de producto en el futuro. Con la validación en el
+Tool Layer, en el peor caso el usuario ve un mensaje de error claro
+("ya existe un producto llamado 'cuaderno'... usa actualizar_producto
+o ajustar_inventario") en vez de un producto duplicado silencioso.
+
+**Por qué el alcance es solo productos activos de la misma empresa:**
+el chequeo usa `for_company` (nunca bloquea entre empresas distintas)
+y solo contra productos ACTIVOS — un producto desactivado no bloquea
+reutilizar su nombre (ej. si se reemplaza un producto discontinuado
+por una versión nueva con el mismo nombre comercial).
+
+**Alternativas consideradas:**
+- *Confiar solo en el prompt, sin cambio de código:* se descartó tras
+  ver el prompt fallar dos veces seguidas en la misma conversación —
+  no es una garantía suficiente para la integridad del catálogo.
+- *Bloquear duplicados también para productos inactivos:* se descartó
+  — reutilizar un nombre para un producto reemplazado es un caso de
+  uso legítimo, y el `UniqueConstraint` de SKU ya cubre el caso donde
+  sí importa la unicidad estricta (identificador de proveedor/inventario).
+- *Fusionar automáticamente en vez de rechazar (ej. si ya existe
+  "cuaderno", tratar `crear_producto` como si fuera `actualizar_producto`):*
+  descartado — cambiaría el comportamiento de un intent explícito sin
+  que el usuario lo pidiera, y sería sorprendente si alguna vez sí
+  quiere crear un producto realmente distinto que coincide de nombre
+  con uno inactivo reciclado accidentalmente. Un error claro, más
+  fácil de corregir en el siguiente mensaje, es más seguro.
+
+**Consecuencias:** `crear_producto` (y por lo tanto `POST
+/api/products/` y el intent `crear_producto` del asistente) ahora
+puede fallar con `ValidationError` si el nombre ya existe activo en la
+empresa — comportamiento nuevo tanto para la API HTTP como para el
+asistente, pero que solo se activa en el caso que ya era un bug (un
+nombre duplicado nunca fue una operación intencional soportada). Sin
+migración de base de datos: la unicidad se valida en la capa de
+servicio, no con un `UniqueConstraint` de base de datos, para permitir
+reactivar el mismo nombre en un producto inactivo sin conflicto.

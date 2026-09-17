@@ -61,6 +61,42 @@ class CrearProductoTests(TestCase):
         with self.assertRaises(ValidationError):
             crear_producto(company=self.company, user=self.user, name="Otro", sku="ABC-1")
 
+    def test_rejects_duplicate_name_in_same_company(self):
+        # Bug real (ver docs/DECISIONS.md ADR-027): "el stock de cuaderno
+        # es de 200" / "y este cuaderno lo vamos a vender a 1750" en
+        # mensajes de seguimiento terminaron creando dos "cuaderno" MÁS
+        # (tres en total) en vez de actualizar el que ya existía — el
+        # Tool Layer rechaza el duplicado como última línea de defensa,
+        # independiente de qué intent haya elegido el LLM.
+        crear_producto(company=self.company, user=self.user, name="Cuaderno")
+
+        with self.assertRaises(ValidationError):
+            crear_producto(company=self.company, user=self.user, name="Cuaderno")
+
+    def test_rechaza_nombre_duplicado_sin_importar_mayusculas_o_espacios(self):
+        crear_producto(company=self.company, user=self.user, name="Cuaderno")
+
+        with self.assertRaises(ValidationError):
+            crear_producto(company=self.company, user=self.user, name="  cuaderno  ")
+
+    def test_permite_reusar_nombre_de_un_producto_inactivo(self):
+        producto = crear_producto(company=self.company, user=self.user, name="Cuaderno")
+        producto.is_active = False
+        producto.save(update_fields=["is_active"])
+
+        nuevo = crear_producto(company=self.company, user=self.user, name="Cuaderno")
+
+        self.assertEqual(nuevo.name, "Cuaderno")
+
+    def test_mismo_nombre_permitido_en_otra_empresa(self):
+        other_company = CompanyFactory()
+        other_user = UserFactory()
+        crear_producto(company=other_company, user=other_user, name="Cuaderno")
+
+        producto = crear_producto(company=self.company, user=self.user, name="Cuaderno")
+
+        self.assertEqual(producto.name, "Cuaderno")
+
     def test_same_sku_allowed_in_different_company(self):
         other_company = CompanyFactory()
         ProductFactory(company=other_company, sku="ABC-1")
