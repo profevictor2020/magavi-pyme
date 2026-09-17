@@ -5,6 +5,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nuevo intent "asesoria": sugerencias de marketing basadas en datos reales
+
+Pedido en vivo, no un bug: después de ver el ranking de productos más
+vendidos, "dame una sugerencia de estrategia de marketing para vender
+los otros productos" cayó en `no_entendido` — correctamente, porque el
+asistente solo sabía traducir mensajes a acciones sobre datos, nunca
+dar consejos abiertos. Se le preguntó al usuario si quería expandir el
+alcance para cubrir esto, con la condición de que la sugerencia use
+datos reales del negocio (no una respuesta genérica de marketing).
+
+Se agregó el intent `asesoria`: a diferencia de `responder` (que solo
+declara hechos verificados, nunca inventa nada), este SÍ puede
+proponer ideas creativas — es inherente a una sugerencia de marketing
+— pero basadas en datos reales de la empresa. Para que la sugerencia
+sea concreta desde el primer mensaje (no solo cuando el usuario acaba
+de pedir el ranking), ahora se manda el ranking de productos más
+vendidos como contexto en cada mensaje, igual que ya se hacía con el
+catálogo. Acotado explícitamente a consejos de negocio de esta pyme —
+una pregunta sin relación con gestionar el negocio sigue devolviendo
+"no entendí". Ver ADR-023 (`docs/DECISIONS.md`).
+
 ### Consultas históricas: gastos y ventas por mes, año, total o rango
 
 Bug de fondo encontrado en vivo: "qué gastos tenemos este mes" en

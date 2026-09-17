@@ -35,6 +35,14 @@ fecha de hoy para "este mes" o "este año". Para un rango explícito
 hoy (para saber a qué año se refiere "agosto"), así que se le da en
 _construir_contexto_fecha como contexto de sistema, igual que el
 catálogo — nunca la calcula a ciegas.
+
+Sugerencias de negocio (ver docs/DECISIONS.md ADR-023): el intent
+"asesoria" es el único que puede ser creativo (ideas de marketing,
+promociones) en vez de limitarse a hechos verificables — a diferencia
+de "responder", que nunca inventa nada. Igual se le exige basarse en
+datos reales del negocio (catálogo, ranking de ventas, gastos
+recientes) para que la sugerencia sea concreta, no genérica; y está
+acotado a consejos de negocio de esta pyme, nunca temas sin relación.
 """
 
 import json
@@ -46,6 +54,7 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from cashbox.models import CashMovement
 from catalog.models import Product
 from core.json_utils import parse_json_object
+from sales.services import productos_mas_vendidos
 
 from .llm_providers import get_llm_provider
 from .models import LearnedPhrase, Message
@@ -202,6 +211,27 @@ distinto"), nunca no_entendido: ya sabes la respuesta, aunque sea "no \
 hay otro". NUNCA inventes un dato que no esté realmente en el \
 catálogo/contexto/historial — si la respuesta requeriría adivinar un \
 dato que no tienes, ahí sí usa no_entendido en vez de inventarlo.
+- asesoria: {"respuesta": "<texto breve, en español>"}. Úsalo cuando el \
+usuario pide una SUGERENCIA u opinión sobre cómo mejorar su negocio — \
+estrategias de marketing, ideas para vender más, qué hacer con \
+productos que casi no se venden, cómo bajar gastos, promociones, etc. \
+— ej. "dame una sugerencia de marketing para vender los otros \
+productos", "¿cómo puedo vender más?", "¿qué hago con el stock que no \
+se mueve?". A diferencia de "responder" (que solo declara datos reales \
+ya conocidos), acá SÍ puedes proponer ideas y creatividad — es una \
+sugerencia, no un hecho verificable — pero básala en los datos reales \
+que tengas del catálogo, el ranking de productos más vendidos, los \
+gastos recientes o el historial de esta conversación (ej. si el \
+ranking de más vendidos muestra que "Goma" vende mucho y "Lápiz" casi \
+nada, sugiere algo concreto como un combo Goma+Lápiz) — NUNCA inventes \
+cifras o hechos del negocio que no estén en ese contexto; para lo que \
+sí es verificable, sigue esa misma regla de "no inventar" que \
+"responder". Deja explícito que es una sugerencia (usa "podrías", \
+"te recomendaría", no lo presentes como un hecho). Este intent es \
+SOLO para consejos de negocio de ESTA pyme (ventas, marketing, \
+gastos, inventario) — si el usuario pide algo sin relación con \
+gestionar o hacer crecer su negocio, usa no_entendido en vez de \
+responder algo genérico fuera de ese alcance.
 
 Si no puedes determinar con certeza qué acción corresponde — falta \
 información que necesitas del usuario, el mensaje es ambiguo, o \
@@ -325,6 +355,32 @@ def _construir_contexto_gastos_recientes(company) -> str:
     )
 
 
+def _construir_contexto_ventas_resumen(company) -> str:
+    """Ranking de productos más vendidos (ver docs/DECISIONS.md ADR-023):
+    grounding para el intent "asesoria" — sin esto, una sugerencia de
+    marketing como "¿qué hago con los productos que casi no se venden?"
+    solo tendría datos reales si el usuario ACABA de pedir el ranking
+    (queda en el historial, ver ADR-020); con este contexto, el modelo
+    puede dar una sugerencia fundada en datos reales desde el primer
+    mensaje. Los productos del catálogo que no aparecen acá no tienen
+    ventas registradas — el modelo puede cruzarlo con el catálogo (ver
+    _construir_contexto_catalogo) para identificar productos sin
+    movimiento, sin que se le tenga que decir explícitamente cuáles son.
+    """
+    ranking = productos_mas_vendidos(company=company, limit=10)
+    if not ranking:
+        return ""
+    lineas = [
+        f"- {p['product_name']}: {p['quantity']} unidades vendidas en total (${p['total']})"
+        for p in ranking
+    ]
+    return (
+        "Ranking de productos más vendidos de esta empresa (todas las ventas, "
+        "de mayor a menor; un producto del catálogo que no aparece acá no tiene "
+        "ventas registradas):\n" + "\n".join(lineas)
+    )
+
+
 # Si el mensaje actual contiene alguna de estas marcas, se interpreta como
 # una aclaración explícita de la respuesta anterior del asistente (ver
 # _frase_fallida_a_aprender) — nunca se aprende de dos mensajes que solo
@@ -419,6 +475,18 @@ def _mensaje_para_responder(intent_dict) -> str:
     return _mensaje_no_entendido(intent_dict)
 
 
+def _mensaje_para_asesoria(intent_dict) -> str:
+    """"asesoria" (ver SYSTEM_PROMPT y docs/DECISIONS.md ADR-023): una
+    sugerencia de negocio/marketing, no un hecho — igual que "responder",
+    no pasa por el Tool Layer, pero a diferencia de esa, el contenido es
+    una recomendación (puede ser creativa) en vez de un dato verificable.
+    """
+    respuesta = (intent_dict or {}).get("parameters", {}).get("respuesta")
+    if respuesta:
+        return respuesta
+    return _mensaje_no_entendido(intent_dict)
+
+
 def _mensaje_para_resultado(resultado: dict) -> str:
     if resultado["status"] == "pending_confirmation":
         return (
@@ -506,6 +574,9 @@ def interpretar_y_proponer(*, company, user, mensaje, conversation=None, llm_pro
     gastos_recientes = _construir_contexto_gastos_recientes(company)
     if gastos_recientes:
         messages.append({"role": "system", "content": gastos_recientes})
+    ventas_resumen = _construir_contexto_ventas_resumen(company)
+    if ventas_resumen:
+        messages.append({"role": "system", "content": ventas_resumen})
     messages.extend(historial)
     messages.append({"role": "user", "content": mensaje})
 
@@ -520,6 +591,12 @@ def interpretar_y_proponer(*, company, user, mensaje, conversation=None, llm_pro
         # _mensaje_para_responder) — nada que ejecutar ni confirmar.
         respuesta_texto = _mensaje_para_responder(intent_dict)
         resultado = {"status": "answered", "message": respuesta_texto}
+    elif intent_dict.get("intent") == "asesoria":
+        # Tampoco pasa por proponer_intent/el Tool Layer: es una
+        # sugerencia de negocio, no una acción — ver _mensaje_para_asesoria
+        # y docs/DECISIONS.md ADR-023.
+        respuesta_texto = _mensaje_para_asesoria(intent_dict)
+        resultado = {"status": "advised", "message": respuesta_texto}
     else:
         try:
             ejecutado = proponer_intent(

@@ -8,12 +8,14 @@ from cashbox.models import CashMovement
 from catalog.factories import ProductFactory
 from companies.factories import CompanyFactory
 from sales.models import Sale
+from sales.services import crear_venta
 
 from .llm_providers import FakeLLMProvider
 from .models import Conversation, LearnedPhrase, Message, PendingAction
 from .orchestrator import (
     _construir_contexto_catalogo,
     _construir_contexto_gastos_recientes,
+    _construir_contexto_ventas_resumen,
     _construir_contexto_vocabulario,
     _construir_historial,
     _resumen_resultado_para_historial,
@@ -589,6 +591,45 @@ class ConstruirContextoGastosRecientesTests(TestCase):
         self.assertEqual(_construir_contexto_gastos_recientes(self.company), "")
 
 
+class ConstruirContextoVentasResumenTests(TestCase):
+    """Ver docs/DECISIONS.md ADR-023: grounding para el intent "asesoria"
+    — sin esto, una sugerencia de marketing solo tendría datos reales de
+    ventas si el usuario acababa de pedir el ranking (queda en el
+    historial de ADR-020); con este contexto está disponible siempre."""
+
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+
+    def test_vacio_sin_ventas_registradas(self):
+        self.assertEqual(_construir_contexto_ventas_resumen(self.company), "")
+
+    def test_incluye_nombre_y_cantidad_vendida(self):
+        product = ProductFactory(company=self.company, name="Goma", current_stock=Decimal("100"))
+        crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": product, "quantity": Decimal("10")}],
+        )
+
+        contexto = _construir_contexto_ventas_resumen(self.company)
+
+        self.assertIn("Goma", contexto)
+        self.assertIn("10", contexto)
+
+    def test_excluye_ventas_de_otras_empresas(self):
+        other_company = CompanyFactory()
+        other_user = UserFactory()
+        other_product = ProductFactory(company=other_company, current_stock=Decimal("10"))
+        crear_venta(
+            company=other_company,
+            user=other_user,
+            items=[{"product": other_product, "quantity": Decimal("5")}],
+        )
+
+        self.assertEqual(_construir_contexto_ventas_resumen(self.company), "")
+
+
 class ResumenResultadoParaHistorialTests(TestCase):
     """Ver docs/DECISIONS.md ADR-020: lo que se guarda del lado del
     asistente tiene que traer el dato real, no solo un mensaje
@@ -825,3 +866,74 @@ class ResponderIntentTests(TestCase):
         self.assertEqual(resultado["status"], "answered")
         self.assertEqual(resultado["message"], "No, por ahora ese es el único gasto registrado.")
         self.assertEqual(PendingAction.objects.for_company(self.company).count(), 0)
+
+
+class AsesoriaIntentTests(TestCase):
+    """Ver docs/DECISIONS.md ADR-023: una sugerencia de negocio/marketing
+    tampoco pasa por el Tool Layer — es una recomendación, no una acción
+    ni una consulta a la base de datos."""
+
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+
+    def test_asesoria_no_pasa_por_el_tool_layer(self):
+        llm = FakeLLMProvider(
+            [
+                _json(
+                    "asesoria",
+                    {"respuesta": "Podrías armar un combo con los productos que menos se venden."},
+                )
+            ]
+        )
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="dame una idea de marketing",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "advised")
+        self.assertEqual(
+            resultado["message"], "Podrías armar un combo con los productos que menos se venden."
+        )
+        self.assertEqual(PendingAction.objects.for_company(self.company).count(), 0)
+
+    def test_asesoria_sin_respuesta_cae_a_no_entendido(self):
+        llm = FakeLLMProvider([_json("asesoria", {})])
+
+        resultado = interpretar_y_proponer(
+            company=self.company, user=self.user, mensaje="dame una idea", llm_provider=llm
+        )
+
+        self.assertEqual(resultado["status"], "advised")
+        self.assertTrue(resultado["message"])
+
+    def test_respuesta_de_asesoria_queda_en_el_historial(self):
+        conversation = Conversation.objects.create(company=self.company, user=self.user)
+        llm = FakeLLMProvider(
+            [
+                _json("asesoria", {"respuesta": "Prueba un descuento por volumen."}),
+                _json("consultar_gastos"),
+            ]
+        )
+
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="dame una idea de marketing",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="ya, gracias",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+
+        segunda_llamada = llm.llamadas[1]
+        contenidos = " ".join(m["content"] for m in segunda_llamada)
+        self.assertIn("Prueba un descuento por volumen.", contenidos)

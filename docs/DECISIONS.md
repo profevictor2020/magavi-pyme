@@ -1085,7 +1085,7 @@ soporte histórico), no un intent puntual que faltara.
 **Decisión:** se agrega `core.dates.resolve_period_range(period,
 date_from, date_to)`, una sola función que resuelve cualquier consulta
 histórica a un rango `(inicio, fin)` en hora local:
-- `period` con nombre — "hoy"/"semana"/"mes"/"anio"/"total" — se \
+- `period` con nombre — "hoy"/"semana"/"mes"/"anio"/"total" — se
   calcula ENTERAMENTE en el servidor (mismo principio que
   `today_and_week_start` ya usaba para "hoy"/"semana"): el modelo no
   necesita saber la fecha de hoy para pedir "este mes" o "este año",
@@ -1145,3 +1145,79 @@ como contexto de sistema adicional — mismo principio de grounding que
 ya se aplicaba al catálogo, vocabulario y gastos recientes, nunca
 concatenado al mensaje del usuario (no cambia la defensa de
 docs/SECURITY.md #5).
+
+---
+
+## ADR-023 — Intent `asesoria`: sugerencias de negocio grounded en datos reales
+
+**Contexto:** probando en vivo, después de ver el ranking de productos
+más vendidos, el usuario pidió "dame alguna sugerencia para alguna
+estrategia de marketing para poder vender los otros productos" — cayó
+en `no_entendido`, correctamente: el asistente solo sabe traducir
+mensajes a acciones sobre datos (ventas, gastos, inventario), nunca dar
+consejos abiertos. Antes de implementar nada se le preguntó
+explícitamente al usuario si quería expandir el alcance del asistente
+para cubrir este tipo de pregunta — no es un bug, es una decisión de
+producto — y la respuesta fue sí, con una condición explícita: que la
+sugerencia use datos reales del negocio (ventas, no solo el catálogo),
+no una respuesta genérica de marketing sin relación con la pyme real.
+
+**Decisión:** se agrega `asesoria`, un intent nuevo con la misma
+mecánica que `responder` (ADR-021) — no pasa por `proponer_intent`/el
+Tool Layer, no crea `PendingAction`, resultado `{"status": "advised",
+"message": ...}` — pero con una diferencia central en lo que se le
+permite decir: `responder` nunca inventa nada (solo declara hechos ya
+verificados); `asesoria` SÍ puede proponer ideas creativas (eso es
+inherente a una sugerencia de marketing), pero tiene que basarlas en
+datos reales de la empresa, nunca en cifras o hechos de negocio
+inventados. Para que esas ideas sean concretas y no genéricas, se
+agrega `_construir_contexto_ventas_resumen`: un ranking de productos
+más vendidos (reutilizando `sales.services.productos_mas_vendidos`)
+que se manda como contexto de sistema en CADA mensaje, igual que el
+catálogo — así el modelo puede identificar qué productos del catálogo
+no aparecen en el ranking (sin ventas) y sugerir algo específico (ej.
+un combo con el producto más vendido) desde el primer mensaje, sin
+depender de que el usuario haya pedido el ranking justo antes (aunque
+si lo pidió, ADR-020 ya lo deja en el historial igual).
+
+El intent está acotado explícitamente en el `SYSTEM_PROMPT` a consejos
+de negocio de ESTA pyme (ventas, marketing, gastos, inventario) — una
+pregunta sin relación con gestionar o hacer crecer el negocio (ej. una
+tarea personal) sigue cayendo en `no_entendido`, para que MAGAVI no se
+convierta en un chatbot genérico.
+
+**Por qué no reutilizar `responder` para esto:** aunque el mecanismo de
+ejecución es idéntico, la semántica es distinta y vale la pena
+distinguirla — `responder` es una afirmación verificable ("ese gasto
+no tiene descripción"); `asesoria` es una opinión/recomendación
+("podrías intentar X"). Mezclarlas en un solo intent haría más difícil
+razonar sobre la regla de "nunca inventar" (que aplica distinto a cada
+una) y sobre cualquier métrica futura de calidad de respuestas. Se
+agrega un status HTTP distinto (`"advised"` vs `"answered"`) por la
+misma razón, aunque hoy el frontend los trate igual (texto simple +
+voz) — deja la puerta abierta a distinguirlos visualmente más adelante
+sin otro cambio de API.
+
+**Alternativas consideradas:**
+- *No implementar nada, dejar `no_entendido` para este tipo de
+  pregunta:* era la opción por defecto — se descartó porque el usuario
+  pidió explícitamente la capacidad, con la condición de que use datos
+  reales.
+- *Sugerencias genéricas sin cruzar con los datos del negocio:* el
+  usuario la rechazó explícitamente a favor de la opción con datos
+  reales — una sugerencia sin contexto real ("publica en redes
+  sociales") es genérica y poco útil para una pyme específica.
+- *Convertir MAGAVI en un asistente de negocio de propósito general
+  (sin acotar el alcance a consejos de esta pyme):* descartado — se
+  agregó la restricción explícita en el prompt para que el asistente
+  seguiga siendo una herramienta de gestión, no un chatbot genérico que
+  responda cualquier cosa.
+
+**Consecuencias:** un cuarto status (`"advised"`) se suma a la API de
+`/api/assistant/chat/`, tratado igual que `no_entendido`/`error`/
+`answered` por cualquier cliente (texto simple, sin acción pendiente).
+Cada mensaje al LLM ahora también incluye el ranking de ventas como
+contexto de sistema (cuando hay ventas registradas) — mismo trade-off
+de tokens que los demás contextos de grounding, aceptado por la misma
+razón: sin datos reales, la funcionalidad no cumple lo que el usuario
+pidió. Sin cambios de base de datos ni del Tool Layer.

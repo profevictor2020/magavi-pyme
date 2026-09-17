@@ -181,7 +181,8 @@ export function ChatPage() {
       if (
         response.status === 'no_entendido' ||
         response.status === 'error' ||
-        response.status === 'answered'
+        response.status === 'answered' ||
+        response.status === 'advised'
       ) {
         appendMessage({ id: nextId(), role: 'assistant', text: response.message })
         if (viaVoice) void speak(response.message)

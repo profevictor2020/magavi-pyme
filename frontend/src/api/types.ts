@@ -167,6 +167,7 @@ export type ChatResult =
   | { status: 'no_entendido'; message: string }
   | { status: 'error'; message: string }
   | { status: 'answered'; message: string }
+  | { status: 'advised'; message: string }
   | { status: 'executed'; result: unknown }
   | {
       status: 'pending_confirmation'

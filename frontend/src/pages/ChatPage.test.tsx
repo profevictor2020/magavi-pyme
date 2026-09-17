@@ -120,4 +120,24 @@ describe('ChatPage', () => {
       ).toBeInTheDocument(),
     )
   })
+
+  it('muestra una sugerencia de negocio del intent "asesoria"', async () => {
+    mockedAssistantApi.chat.mockResolvedValue({
+      conversation_id: 3,
+      status: 'advised',
+      message: 'Podrías armar un combo con los productos que menos se venden.',
+    })
+
+    const user = userEvent.setup()
+    render(<ChatPage />)
+
+    await user.type(screen.getByPlaceholderText('Escribe un mensaje…'), 'dame una idea de marketing')
+    await user.click(screen.getByText('Enviar'))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Podrías armar un combo con los productos que menos se venden.'),
+      ).toBeInTheDocument(),
+    )
+  })
 })
