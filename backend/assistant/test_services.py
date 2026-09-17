@@ -81,6 +81,17 @@ class ProponerIntentTests(TestCase):
                 raw_parameters={"product_id": foreign_product.id},
             )
 
+    def test_consultar_productos_mas_vendidos_executes_immediately(self):
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="consultar_productos_mas_vendidos",
+            raw_parameters={},
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"], [])
+
     def test_consultar_producto_executes_immediately(self):
         resultado = proponer_intent(
             company=self.company,

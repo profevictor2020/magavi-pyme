@@ -143,3 +143,26 @@ def consultar_ventas_producto(*, company, product):
         "today": summarize(today_start),
         "week": summarize(week_start),
     }
+
+
+def productos_mas_vendidos(*, company, limit=5):
+    """Tool Layer de solo lectura: ranking de productos por unidades
+    vendidas, contando TODAS las ventas confirmadas (sin acotar a hoy/
+    semana — "¿cuál es el producto que más se ha vendido?" es una
+    pregunta de siempre, no de un período puntual como consultar_ventas).
+    """
+    aggregates = (
+        SaleItem.objects.filter(sale__company=company, sale__status=Sale.Status.CONFIRMED)
+        .values("product_id", "product__name")
+        .annotate(quantity=Sum("quantity"), total=Sum("subtotal"))
+        .order_by("-quantity")[:limit]
+    )
+    return [
+        {
+            "product_id": row["product_id"],
+            "product_name": row["product__name"],
+            "quantity": str(row["quantity"]),
+            "total": str(row["total"]),
+        }
+        for row in aggregates
+    ]

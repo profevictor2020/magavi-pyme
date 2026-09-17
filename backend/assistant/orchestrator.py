@@ -21,7 +21,7 @@ from catalog.models import Product
 from core.json_utils import parse_json_object
 
 from .llm_providers import get_llm_provider
-from .models import Message
+from .models import LearnedPhrase, Message
 from .services import proponer_intent
 
 _PROPOSAL_ERRORS = (DjangoValidationError, DRFValidationError)
@@ -78,6 +78,11 @@ este)
 - consultar_ventas_producto: {"product_id": <int>} (cuántas unidades se \
 vendieron de UN producto puntual, hoy y esta semana — ej. "¿cuántas \
 gomas hemos vendido?", "¿cuánto vendí de X esta semana?")
+- consultar_productos_mas_vendidos: {} (ranking de productos por \
+unidades vendidas, contando siempre TODAS las ventas — no hoy ni esta \
+semana, sino desde siempre — ej. "¿cuál es el producto que más se ha \
+vendido?", "¿qué se vende más?", "top de productos", "¿qué productos \
+se venden mejor?")
 - consultar_stock_bajo: {}
 - consultar_producto: {"product_id": <int>} (para preguntas sobre el \
 STOCK o PRECIO de UN producto puntual, no sobre cuánto se ha vendido de \
@@ -132,6 +137,74 @@ def _construir_contexto_catalogo(company) -> str:
     )
 
 
+def _construir_contexto_vocabulario(company) -> str:
+    """Vocabulario propio de esta empresa aprendido de aclaraciones
+    anteriores (ver LearnedPhrase, docs/DECISIONS.md ADR-017): mismo
+    mecanismo de grounding que _construir_contexto_catalogo, pero para
+    frases/jerga en vez de datos de productos. Cadena vacía si la
+    empresa todavía no le ha enseñado nada al asistente — no agrega un
+    mensaje de sistema de más por gusto.
+    """
+    frases = list(LearnedPhrase.objects.for_company(company).order_by("-created_at")[:30])
+    if not frases:
+        return ""
+    lineas = [f'- "{f.phrase}" corresponde a la acción {f.intent_name}' for f in frases]
+    return (
+        "Vocabulario propio de esta empresa (frases que este usuario ya usó antes "
+        "y qué acción terminaron significando — interpreta frases parecidas de la "
+        "misma forma, sin volver a preguntar):\n" + "\n".join(lineas)
+    )
+
+
+# Si el mensaje actual contiene alguna de estas marcas, se interpreta como
+# una aclaración explícita de la respuesta anterior del asistente (ver
+# _frase_fallida_a_aprender) — nunca se aprende de dos mensajes que solo
+# quedaron uno después del otro por casualidad, para no asociar una frase
+# fallida con la acción de un mensaje sin ninguna relación real.
+_MARCAS_DE_ACLARACION = (
+    "me refiero a",
+    "quiero decir",
+    "con eso me refiero",
+    "lo que pregunto es",
+    "o sea",
+    "digo",
+)
+
+
+def _frase_fallida_a_aprender(conversation, mensaje_actual: str) -> str | None:
+    """Si el mensaje actual aclara explícitamente un "no entendido"
+    inmediatamente anterior en la misma conversación, devuelve la frase
+    original que falló (para guardarla en LearnedPhrase una vez que esta
+    aclaración se resuelva a un intent concreto). None en cualquier otro
+    caso.
+    """
+    if conversation is None:
+        return None
+    texto = mensaje_actual.lower()
+    if not any(marca in texto for marca in _MARCAS_DE_ACLARACION):
+        return None
+
+    ultimos = list(conversation.messages.order_by("-created_at")[:2])
+    if len(ultimos) != 2:
+        return None
+    ultimo, penultimo = ultimos
+    if ultimo.role != Message.Role.ASSISTANT or penultimo.role != Message.Role.USER:
+        return None
+    if (ultimo.structured_intent or {}).get("intent") != "no_entendido":
+        return None
+    return penultimo.content
+
+
+def _registrar_frase_aprendida(*, company, phrase: str, intent_name: str) -> None:
+    existente = LearnedPhrase.objects.for_company(company).filter(phrase=phrase).first()
+    if existente is not None:
+        if existente.intent_name != intent_name:
+            existente.intent_name = intent_name
+            existente.save(update_fields=["intent_name"])
+        return
+    LearnedPhrase.objects.create(company=company, phrase=phrase, intent_name=intent_name)
+
+
 def _pedir_intent_al_llm(llm_provider, messages):
     """Hasta MAX_INTENT_ATTEMPTS intentos: si el modelo no devuelve un
     JSON con la forma esperada, se le pide corregirlo antes de rendirse.
@@ -180,14 +253,23 @@ def interpretar_y_proponer(*, company, user, mensaje, conversation=None, llm_pro
     """
     llm_provider = llm_provider or get_llm_provider()
 
+    # Se calcula ANTES de guardar el mensaje entrante: depende de que los
+    # últimos dos mensajes de la conversación sean todavía [respuesta
+    # "no entendido", mensaje original que falló] (ver
+    # _frase_fallida_a_aprender).
+    frase_a_aprender = _frase_fallida_a_aprender(conversation, mensaje)
+
     if conversation is not None:
         Message.objects.create(conversation=conversation, role=Message.Role.USER, content=mensaje)
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "system", "content": _construir_contexto_catalogo(company)},
-        {"role": "user", "content": mensaje},
     ]
+    vocabulario = _construir_contexto_vocabulario(company)
+    if vocabulario:
+        messages.append({"role": "system", "content": vocabulario})
+    messages.append({"role": "user", "content": mensaje})
 
     intent_dict, _raw = _pedir_intent_al_llm(llm_provider, messages)
 
@@ -212,6 +294,12 @@ def interpretar_y_proponer(*, company, user, mensaje, conversation=None, llm_pro
         else:
             resultado = ejecutado
             respuesta_texto = _mensaje_para_resultado(ejecutado)
+            if frase_a_aprender:
+                _registrar_frase_aprendida(
+                    company=company,
+                    phrase=frase_a_aprender,
+                    intent_name=intent_dict["intent"],
+                )
 
     if conversation is not None:
         Message.objects.create(

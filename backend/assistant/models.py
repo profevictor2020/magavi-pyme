@@ -41,6 +41,34 @@ class Message(models.Model):
         return f"{self.role}: {self.content[:40]}"
 
 
+class LearnedPhrase(models.Model):
+    """Vocabulario propio de una empresa: frases que ese usuario ya usó
+    antes y a qué intent terminaron correspondiendo, para que la próxima
+    vez el modelo la reconozca directamente en vez de responder
+    "no entendido" (ver assistant/orchestrator.py y docs/DECISIONS.md
+    ADR-017). No es un intento de "entrenar" el LLM — es exactamente el
+    mismo mecanismo de grounding que ya se usa para el catálogo (se le da
+    contexto extra en el prompt), solo que acotado a esta empresa y
+    aprendido con el tiempo en vez de venir siempre de la base de datos
+    de productos.
+    """
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="learned_phrases")
+    phrase = models.CharField(max_length=2000)
+    intent_name = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = CompanyScopedManager()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["company"]),
+        ]
+
+    def __str__(self):
+        return f'"{self.phrase}" → {self.intent_name}'
+
+
 class PendingAction(models.Model):
     """Máquina de estados de confirmación para operaciones mutantes
     propuestas por el asistente (ver docs/ARCHITECTURE.md #3.4 y

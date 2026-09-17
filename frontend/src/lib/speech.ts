@@ -14,6 +14,7 @@ import {
   isProductList,
   isProductSalesSummary,
   isReceipt,
+  isTopSellingList,
 } from './resultShapes'
 
 const SPEECH_LANG = 'es-CL'
@@ -188,6 +189,15 @@ export function describeResultForSpeech(result: unknown): string {
     }
     const nombres = result.map((p) => p.name)
     return `${result.length} productos con stock bajo: ${joinWithRemainder(nombres, result.length)}.`
+  }
+
+  if (isTopSellingList(result)) {
+    if (result.length === 0) return 'Todavía no hay ventas registradas.'
+    const [primero] = result
+    return (
+      `El producto que más se ha vendido es ${primero.product_name}, ` +
+      `con ${formatQuantity(primero.quantity)} unidades.`
+    )
   }
 
   return ''

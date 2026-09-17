@@ -9,8 +9,12 @@ from companies.factories import CompanyFactory
 from sales.models import Sale
 
 from .llm_providers import FakeLLMProvider
-from .models import Conversation, Message, PendingAction
-from .orchestrator import _construir_contexto_catalogo, interpretar_y_proponer
+from .models import Conversation, LearnedPhrase, Message, PendingAction
+from .orchestrator import (
+    _construir_contexto_catalogo,
+    _construir_contexto_vocabulario,
+    interpretar_y_proponer,
+)
 
 
 def _json(intent, parameters=None):
@@ -189,6 +193,19 @@ class InterpretarYProponerTests(TestCase):
         self.assertEqual(resultado["status"], "executed")
         self.assertEqual(resultado["result"]["product_id"], self.product.id)
 
+    def test_mensaje_de_producto_mas_vendido_se_ejecuta_de_inmediato(self):
+        llm = FakeLLMProvider([_json("consultar_productos_mas_vendidos")])
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="cuál es el producto que más se ha vendido",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"], [])
+
     def test_intent_con_producto_de_otra_empresa_no_se_ejecuta(self):
         other_company = CompanyFactory()
         foreign_product = ProductFactory(company=other_company, current_stock=Decimal("10"))
@@ -294,3 +311,142 @@ class PromptInjectionTests(TestCase):
         self.assertEqual(resultado["status"], "pending_confirmation")
         foreign_product.refresh_from_db()
         self.assertEqual(foreign_product.current_stock, Decimal("100"))
+
+
+class ConstruirContextoVocabularioTests(TestCase):
+    def test_vacio_sin_frases_aprendidas(self):
+        company = CompanyFactory()
+        self.assertEqual(_construir_contexto_vocabulario(company), "")
+
+    def test_incluye_frases_aprendidas_de_la_empresa(self):
+        company = CompanyFactory()
+        LearnedPhrase.objects.create(
+            company=company, phrase="cómo va el negocio", intent_name="consultar_ventas"
+        )
+
+        contexto = _construir_contexto_vocabulario(company)
+
+        self.assertIn("cómo va el negocio", contexto)
+        self.assertIn("consultar_ventas", contexto)
+
+    def test_no_incluye_frases_de_otra_empresa(self):
+        company = CompanyFactory()
+        other_company = CompanyFactory()
+        LearnedPhrase.objects.create(
+            company=other_company, phrase="frase ajena", intent_name="consultar_ventas"
+        )
+
+        self.assertEqual(_construir_contexto_vocabulario(company), "")
+
+
+class VocabularioAprendidoTests(TestCase):
+    """Ver docs/DECISIONS.md ADR-017: el sistema "aprende" frases de una
+    empresa cuando el usuario aclara explícitamente un "no entendido"
+    anterior en la misma conversación."""
+
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+
+    def test_aclaracion_explicita_despues_de_no_entendido_se_aprende(self):
+        conversation = Conversation.objects.create(company=self.company, user=self.user)
+        llm = FakeLLMProvider(
+            [
+                _json("no_entendido", {"motivo": "mensaje demasiado general"}),
+                _json("consultar_ventas"),
+            ]
+        )
+
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="cómo va el negocio",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="cuando pregunto cómo va el negocio me refiero a cuánto hemos vendido",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+
+        aprendida = LearnedPhrase.objects.for_company(self.company).get()
+        self.assertEqual(aprendida.phrase, "cómo va el negocio")
+        self.assertEqual(aprendida.intent_name, "consultar_ventas")
+
+    def test_sin_marca_de_aclaracion_no_se_aprende_nada(self):
+        conversation = Conversation.objects.create(company=self.company, user=self.user)
+        llm = FakeLLMProvider(
+            [
+                _json("no_entendido", {"motivo": "mensaje demasiado general"}),
+                _json("consultar_ventas"),
+            ]
+        )
+
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="cómo va el negocio",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+        # Un mensaje nuevo sin relación real, sin ninguna marca de
+        # aclaración — no debe asociarse con la frase anterior por pura
+        # casualidad de haber llegado justo después.
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="cuánto he vendido",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+
+        self.assertEqual(LearnedPhrase.objects.for_company(self.company).count(), 0)
+
+    def test_no_entendido_sin_aclaracion_posterior_no_aprende(self):
+        conversation = Conversation.objects.create(company=self.company, user=self.user)
+        llm = FakeLLMProvider([_json("no_entendido", {"motivo": "mensaje demasiado general"})])
+
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="cómo va el negocio",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+
+        self.assertEqual(LearnedPhrase.objects.for_company(self.company).count(), 0)
+
+    def test_sin_conversacion_no_se_aprende_nada(self):
+        # /api/assistant/intents/ (no el chat) puede llamar a
+        # interpretar_y_proponer sin conversation=None — no hay historial
+        # que revisar, así que nunca debe intentar aprender.
+        llm = FakeLLMProvider([_json("consultar_ventas")])
+
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="me refiero a cuánto hemos vendido",
+            conversation=None,
+            llm_provider=llm,
+        )
+
+        self.assertEqual(LearnedPhrase.objects.for_company(self.company).count(), 0)
+
+    def test_vocabulario_aprendido_se_incluye_en_el_siguiente_prompt(self):
+        LearnedPhrase.objects.create(
+            company=self.company, phrase="cómo va el negocio", intent_name="consultar_ventas"
+        )
+        llm = FakeLLMProvider([_json("consultar_ventas")])
+
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="cómo va el negocio",
+            llm_provider=llm,
+        )
+
+        system_messages = [m["content"] for m in llm.llamadas[0] if m["role"] == "system"]
+        self.assertTrue(any("cómo va el negocio" in content for content in system_messages))

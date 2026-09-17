@@ -56,6 +56,13 @@ export interface ProductLike {
   current_stock: string
 }
 
+export interface TopSellingProductLike {
+  product_id: number
+  product_name: string
+  quantity: string
+  total: string
+}
+
 export function isReceipt(value: unknown): value is ReceiptLike {
   return (
     !!value &&
@@ -97,4 +104,11 @@ export function isProduct(value: unknown): value is ProductLike {
 
 export function isProductList(value: unknown): value is ProductLike[] {
   return Array.isArray(value) && (value.length === 0 || 'default_price' in value[0])
+}
+
+export function isTopSellingList(value: unknown): value is TopSellingProductLike[] {
+  // "quantity" (a diferencia de isProductList/isLowStockList) es lo que
+  // distingue el ranking de productos más vendidos de las otras formas
+  // en lista.
+  return Array.isArray(value) && (value.length === 0 || 'quantity' in value[0])
 }

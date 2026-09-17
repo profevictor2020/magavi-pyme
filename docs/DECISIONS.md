@@ -683,3 +683,74 @@ chileno depende del motor del navegador (`lang: 'es-CL'`), fuera del
 control del proyecto. Queda pendiente, si el negocio avanza más allá de
 MVP/demo, evaluar un motor de reconocimiento autoalojado antes de usar
 voz con datos reales de una pyme.
+
+---
+
+## ADR-017 — Vocabulario aprendido por empresa (grounding, no fine-tuning)
+
+**Contexto:** probando el asistente en vivo, mensajes coloquiales que no
+calzan con ninguna frase de ejemplo del `SYSTEM_PROMPT` caen en
+"no entendido" aunque el usuario los use con naturalidad (ej. "¿cómo va
+el negocio?" en vez de "¿cuánto he vendido?"). Cada vez que esto pasa,
+la solución hasta ahora fue que yo revisara el caso reportado y ampliara
+el `SYSTEM_PROMPT` a mano con un ejemplo más — funciona, pero el usuario
+pidió explícitamente algo más automático: que el propio sistema vaya
+"pseudoaprendiendo" la jerga particular de cada pyme a partir de lo que
+sus usuarios corrigen o aclaran, sin que eso signifique entrenar (ajustar
+pesos de) el modelo — cada pyme tiene su propio lenguaje y no hay razón
+para mezclarlo entre empresas ni depender de un ciclo de re-entrenamiento.
+
+**Decisión:** nuevo modelo `LearnedPhrase` (`assistant/models.py`),
+con scope de empresa como el resto del sistema (`CompanyScopedManager`):
+guarda pares (frase del usuario, intent al que correspondió). Se llena
+solo en un caso muy acotado — cuando el mensaje actual contiene una
+marca explícita de aclaración ("me refiero a", "quiero decir", "o sea",
+etc. — ver `_MARCAS_DE_ACLARACION`) Y el mensaje inmediatamente anterior
+del asistente en la misma conversación fue "no entendido". En ese caso
+se guarda la frase ORIGINAL que falló (no la aclaración) asociada al
+intent que la aclaración terminó resolviendo — la próxima vez que
+alguien de esa empresa escriba algo parecido a la frase original, ya no
+hace falta que aclare.
+
+Este vocabulario se inyecta como contexto adicional del prompt
+(`_construir_contexto_vocabulario`), exactamente el mismo mecanismo de
+"grounding" que ya se usa para el catálogo (ver ADR sobre el fix de
+stock/precio real en el prompt más arriba en este archivo) — nunca se
+reentrena ni se ajusta el modelo, así que sigue siendo el mismo LLM
+(intercambiable, ver ADR-003/ADR-010) para todas las empresas; lo único
+que cambia por empresa es el contexto adicional que recibe.
+
+**Por qué exigir una marca de aclaración explícita (no aprender de
+cualquier mensaje que venga después de un "no entendido"):** sin esa
+condición, dos mensajes sin ninguna relación real que por casualidad
+quedaran uno después del otro (ej. un "no entendido" seguido de un
+mensaje totalmente distinto) se asociarían igual, contaminando el
+vocabulario de la empresa con relaciones falsas que después
+confundirían al modelo en vez de ayudarlo. Es una heurística simple
+(no NLP) a propósito — mismo nivel de complejidad que otras heurísticas
+ya usadas en el proyecto (`matchYesNo` en el frontend).
+
+**Alternativas consideradas:**
+- *Aprender de CUALQUIER mensaje que resuelva bien después de un "no
+  entendido", sin exigir marca de aclaración:* descartado por el riesgo
+  de falsos positivos explicado arriba.
+- *Fine-tuning real del modelo con las correcciones de cada empresa:*
+  descartado — requiere infraestructura de entrenamiento y un proveedor
+  dispuesto a hacerlo por empresa (contradice ADR-004/ADR-010, ningún
+  proveedor externo en producción), pierde la propiedad de que el
+  intent se decide de forma determinística por el Tool Layer (el modelo
+  solo propone, nunca ejecuta) y sería mucho más difícil de auditar que
+  una tabla de frase→intent en la propia base de datos.
+- *Guardar todos los "no entendido" sin distinguir cuáles se aclararon
+  después:* es lo que ya hace `Message.structured_intent` — sirve para
+  que un humano (yo, o quien administre la empresa) revise el registro
+  a mano, pero no resuelve el pedido de que el propio sistema se ajuste
+  solo; por eso `LearnedPhrase` es un mecanismo aparte y más acotado.
+
+**Consecuencias:** el vocabulario aprendido es visible/editable solo por
+Django admin por ahora (`LearnedPhraseAdmin`) — no hay una pantalla en
+la PWA para que el dueño de la pyme lo revise o borre una asociación
+errónea; queda pendiente si se vuelve necesario. Una empresa nueva
+empieza sin vocabulario aprendido (el prompt es idéntico al de antes de
+este ADR) y solo empieza a divergir después de su primera aclaración
+explícita — el comportamiento por defecto no cambia para nadie.

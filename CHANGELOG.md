@@ -5,6 +5,32 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Vocabulario aprendido por empresa (ADR-017) + nuevo intent: producto más vendido
+
+Dos pedidos del usuario probando en vivo:
+
+- "¿Cuál es el producto que más se ha vendido?" no tenía ninguna acción
+  — solo existían consultas de ventas totales o de un producto puntual,
+  ninguna de ranking. Nuevo `consultar_productos_mas_vendidos`
+  (`sales/services.py::productos_mas_vendidos`): top de productos por
+  unidades vendidas, contando siempre todas las ventas (no acotado a
+  hoy/semana, a diferencia de `consultar_ventas`).
+- El lenguaje seguía sintiéndose rígido, y el usuario pidió explícito
+  que el sistema "pseudoaprenda" la jerga de cada pyme según la
+  retroalimentación del usuario, **sin entrenar el modelo**. Nuevo
+  modelo `LearnedPhrase` (con scope de empresa, como todo lo demás en el
+  sistema): cuando el usuario aclara explícitamente ("me refiero a...",
+  "quiero decir...") un "no entendido" inmediatamente anterior en la
+  misma conversación, se guarda la frase original que falló asociada al
+  intent que la aclaración terminó resolviendo. Ese vocabulario se
+  inyecta en el prompt como contexto adicional (mismo mecanismo de
+  grounding que ya se usa para el catálogo) — la próxima vez que
+  alguien de esa empresa escriba algo parecido, el modelo ya no
+  pregunta. Ver ADR-017 (`docs/DECISIONS.md`) para el detalle de por
+  qué se exige una marca de aclaración explícita (evitar asociar
+  mensajes sin relación real) y por qué esto es grounding y no
+  fine-tuning. Visible/editable por ahora solo desde Django admin.
+
 ### La voz decía mal los montos grandes + "¿cómo va el negocio?" no se entendía
 
 Dos bugs reales encontrados escuchando las respuestas en vivo:

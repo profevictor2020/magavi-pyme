@@ -155,6 +155,22 @@ describe('describeResultForSpeech', () => {
     expect(text).toContain('2 productos con stock bajo')
   })
 
+  it('describe el producto más vendido (solo el primero del ranking)', () => {
+    const text = describeResultForSpeech([
+      { product_id: 1, product_name: 'Goma', quantity: '10.000', total: '5000.00' },
+      { product_id: 2, product_name: 'Lápiz', quantity: '3.000', total: '3000.00' },
+    ])
+    expect(text).toContain('Goma')
+    expect(text).toContain('10')
+    expect(text).not.toContain('Lápiz')
+  })
+
+  it('describe cuando todavía no hay ventas para el ranking', () => {
+    // Mismo array vacío que consultar_catalogo — ver el comentario en
+    // isTopSellingList sobre esta ambigüedad ya existente en el proyecto.
+    expect(describeResultForSpeech([])).toBe('No hay productos en el catálogo.')
+  })
+
   it('devuelve cadena vacía para formas desconocidas', () => {
     expect(describeResultForSpeech({ foo: 'bar' })).toBe('')
   })

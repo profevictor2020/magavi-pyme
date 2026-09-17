@@ -23,7 +23,12 @@ from inventory.services import ajustar_inventario
 from purchases.serializers import PurchaseCreateSerializer
 from purchases.services import registrar_compra
 from sales.serializers import SaleCreateSerializer
-from sales.services import consultar_ventas, consultar_ventas_producto, crear_venta
+from sales.services import (
+    consultar_ventas,
+    consultar_ventas_producto,
+    crear_venta,
+    productos_mas_vendidos,
+)
 
 from .serializers import (
     ActualizarProductoIntentSerializer,
@@ -116,6 +121,10 @@ def _ejecutar_consultar_ventas_producto(*, company, user, params):
     return consultar_ventas_producto(company=company, product=product)
 
 
+def _ejecutar_consultar_productos_mas_vendidos(*, company, user, params):
+    return productos_mas_vendidos(company=company)
+
+
 def _ejecutar_consultar_stock_bajo(*, company, user, params):
     return consultar_stock_bajo(company=company)
 
@@ -167,6 +176,9 @@ INTENTS: dict[str, IntentDefinition] = {
     "consultar_ventas": IntentDefinition(EmptyParamsSerializer, False, _ejecutar_consultar_ventas),
     "consultar_ventas_producto": IntentDefinition(
         ConsultarVentasProductoIntentSerializer, False, _ejecutar_consultar_ventas_producto
+    ),
+    "consultar_productos_mas_vendidos": IntentDefinition(
+        EmptyParamsSerializer, False, _ejecutar_consultar_productos_mas_vendidos
     ),
     "consultar_stock_bajo": IntentDefinition(
         EmptyParamsSerializer, False, _ejecutar_consultar_stock_bajo

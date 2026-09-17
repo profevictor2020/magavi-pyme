@@ -7,6 +7,7 @@ import {
   isProductList,
   isProductSalesSummary,
   isReceipt,
+  isTopSellingList,
 } from '../lib/resultShapes'
 
 /** Renderiza el resultado de un intent ejecutado/confirmado. Cubre las
@@ -123,6 +124,20 @@ export function ResultView({ result }: { result: unknown }) {
           </li>
         ))}
       </ul>
+    )
+  }
+
+  if (isTopSellingList(result)) {
+    if (result.length === 0) return <div className="result-card">Todavía no hay ventas registradas.</div>
+    return (
+      <ol className="result-items result-card">
+        {result.map((product) => (
+          <li key={product.product_id}>
+            {product.product_name}: {formatQuantity(product.quantity)} vendidas —{' '}
+            {formatCLP(product.total)}
+          </li>
+        ))}
+      </ol>
     )
   }
 
