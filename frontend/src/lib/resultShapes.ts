@@ -99,6 +99,13 @@ export function isReceipt(value: unknown): value is ReceiptLike {
   )
 }
 
+export function isReceiptList(value: unknown): value is ReceiptLike[] {
+  // consultar_detalle_ventas (ver ADR-026): lista de ventas completas,
+  // cada una con su propio desglose de ítems — "items"+"total" en cada
+  // elemento es lo que la distingue de las demás formas en lista.
+  return Array.isArray(value) && (value.length === 0 || isReceipt(value[0]))
+}
+
 export function isMovement(value: unknown): value is MovementLike {
   return !!value && typeof value === 'object' && 'balance_after' in value
 }

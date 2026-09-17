@@ -5,6 +5,23 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nuevo intent "consultar_detalle_ventas": el detalle por venta, no solo el total
+
+Bug encontrado en vivo: después de ver "Este mes: $11.400 (3 ventas)",
+"detállame esas ventas" cayó en `no_entendido` — correctamente
+diagnosticado por el propio modelo: no existía ningún intent que
+devolviera cada venta por separado, solo los totales agregados
+(`consultar_ventas`/`consultar_ventas_periodo`). Mismo gap que ya
+estaba resuelto para gastos (`consultar_gastos`) pero nunca se
+construyó para ventas.
+
+Se agregó `consultar_detalle_ventas`: cada venta con su fecha, cliente,
+total y desglose de ítems — misma forma que ya devuelve una venta
+recién confirmada, reutilizada en el frontend en vez de inventar una
+forma de datos nueva. Acepta los mismos filtros de período que
+`consultar_gastos` ("de este mes", "de hoy", etc.). Ver ADR-026
+(`docs/DECISIONS.md`).
+
 ### "Avísame cuando el stock llegue a X" caía en no_entendido
 
 Bug encontrado en vivo: "hazme un recuerdo cuando lleguen a 5 de que

@@ -192,6 +192,15 @@ período: "¿cuánto llevo vendido en total?", "¿cuánto vendí este mes?", \
 "¿cuánto vendí este año?", "ventas de agosto". Sin period ni fechas \
 equivale a period="total" — todo el histórico de ventas. Mismas reglas \
 de period/date_from/date_to que consultar_gastos)
+- consultar_detalle_ventas: {} o {"period": "hoy"|"semana"|"mes"|"anio"|\
+"total", "date_from": "AAAA-MM-DD", "date_to": "AAAA-MM-DD"} (lista \
+cada venta individual — id, fecha, cliente, total e ítems vendidos —, \
+más recientes primero. Úsalo cuando el usuario quiere el DETALLE de \
+las ventas, no solo el total agregado: "detállame esas ventas", \
+"muéstrame las ventas de hoy", "qué vendí este mes" si pide ver cada \
+venta por separado. Si solo pregunta CUÁNTO vendió en un período, sin \
+pedir el detalle, usa consultar_ventas/consultar_ventas_periodo en vez \
+de este. Mismas reglas de period/date_from/date_to que consultar_gastos)
 - consultar_ventas_producto: {"product_id": <int>} (cuántas unidades se \
 vendieron de UN producto puntual, hoy y esta semana — ej. "¿cuántas \
 gomas hemos vendido?", "¿cuánto vendí de X esta semana?")

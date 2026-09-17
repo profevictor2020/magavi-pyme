@@ -34,6 +34,7 @@ from sales.services import (
     consultar_ventas_periodo,
     consultar_ventas_producto,
     crear_venta,
+    listar_ventas,
     productos_mas_vendidos,
 )
 
@@ -41,6 +42,7 @@ from .serializers import (
     ActualizarGastoIntentSerializer,
     ActualizarProductoIntentSerializer,
     AjustarInventarioIntentSerializer,
+    ConsultarDetalleVentasIntentSerializer,
     ConsultarGastosIntentSerializer,
     ConsultarProductoIntentSerializer,
     ConsultarVentasPeriodoIntentSerializer,
@@ -176,6 +178,15 @@ def _ejecutar_consultar_ventas_producto(*, company, user, params):
     return consultar_ventas_producto(company=company, product=product)
 
 
+def _ejecutar_consultar_detalle_ventas(*, company, user, params):
+    return listar_ventas(
+        company=company,
+        period=params.get("period"),
+        date_from=params.get("date_from"),
+        date_to=params.get("date_to"),
+    )
+
+
 def _ejecutar_consultar_productos_mas_vendidos(*, company, user, params):
     return productos_mas_vendidos(company=company)
 
@@ -243,6 +254,9 @@ INTENTS: dict[str, IntentDefinition] = {
     ),
     "consultar_ventas_producto": IntentDefinition(
         ConsultarVentasProductoIntentSerializer, False, _ejecutar_consultar_ventas_producto
+    ),
+    "consultar_detalle_ventas": IntentDefinition(
+        ConsultarDetalleVentasIntentSerializer, False, _ejecutar_consultar_detalle_ventas
     ),
     "consultar_productos_mas_vendidos": IntentDefinition(
         EmptyParamsSerializer, False, _ejecutar_consultar_productos_mas_vendidos

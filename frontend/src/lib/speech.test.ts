@@ -94,6 +94,31 @@ describe('describeResultForSpeech', () => {
     expect(text).toContain('Compra registrada')
   })
 
+  it('describe el detalle de varias ventas (consultar_detalle_ventas)', () => {
+    // Ver docs/DECISIONS.md ADR-026: "detállame esas ventas" pedía el
+    // desglose por venta, no solo el total agregado.
+    const text = describeResultForSpeech([
+      {
+        id: 1,
+        total: '700.00',
+        status: 'confirmed',
+        sold_at: '2026-09-17T14:00:00Z',
+        customer_name: '',
+        items: [{ id: 1, product: 3, quantity: '2.000', unit_price: '350', subtotal: '700.00' }],
+      },
+      {
+        id: 2,
+        total: '10700.00',
+        status: 'confirmed',
+        sold_at: '2026-09-17T11:00:00Z',
+        customer_name: '',
+        items: [],
+      },
+    ])
+    expect(text).toContain('Tienes 2 ventas')
+    expect(text).toContain('pesos')
+  })
+
   it('describe un movimiento de inventario con el nuevo stock', () => {
     const text = describeResultForSpeech({
       id: 1,

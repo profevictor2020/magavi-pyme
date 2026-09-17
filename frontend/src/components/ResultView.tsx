@@ -9,6 +9,7 @@ import {
   isProductList,
   isProductSalesSummary,
   isReceipt,
+  isReceiptList,
   isSalesPeriodTotal,
   isTopSellingList,
 } from '../lib/resultShapes'
@@ -189,6 +190,37 @@ export function ResultView({ result }: { result: unknown }) {
           </li>
         ))}
       </ul>
+    )
+  }
+
+  if (isReceiptList(result)) {
+    // Se revisa al final, después de las demás formas en lista: un
+    // array vacío es ambiguo entre todas ellas (ver isProductList
+    // arriba en resultShapes.ts), así que el orden decide qué mensaje
+    // gana — se prioriza mantener el de las formas ya existentes.
+    if (result.length === 0) return <div className="result-card">Sin ventas registradas.</div>
+    return (
+      <div className="result-items result-card">
+        {result.map((venta) => (
+          <div key={venta.id} style={{ marginBottom: '0.5rem' }}>
+            <strong>
+              Venta #{venta.id} — {formatCLP(venta.total)}
+            </strong>
+            <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+              {venta.sold_at && formatDateTime(venta.sold_at)} ·{' '}
+              {venta.customer_name || 'Sin nombre registrado'}
+            </div>
+            <ul className="result-items">
+              {venta.items.map((item) => (
+                <li key={item.id}>
+                  Producto #{item.product} · {formatQuantity(item.quantity)} ×{' '}
+                  {formatCLP(item.unit_price)} = {formatCLP(item.subtotal)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     )
   }
 

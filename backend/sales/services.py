@@ -143,6 +143,51 @@ def consultar_ventas_periodo(*, company, period=None, date_from=None, date_to=No
     }
 
 
+def listar_ventas(*, company, period=None, date_from=None, date_to=None, limit=50):
+    """Tool Layer de solo lectura: detalle de ventas confirmadas, una por
+    una (id, fecha, cliente, total e ítems vendidos) — a diferencia de
+    consultar_ventas/consultar_ventas_periodo, que solo dan el total
+    agregado, esto es para "detállame esas ventas", "qué vendí hoy en
+    detalle" (ver docs/DECISIONS.md ADR-026).
+
+    Mismas reglas de period/date_from/date_to que consultar_gastos/
+    consultar_ventas_periodo (ver core.dates.resolve_period_range): sin
+    ninguno, no filtra por fecha — trae las últimas `limit`, más
+    recientes primero.
+    """
+    inicio, fin = resolve_period_range(period, date_from, date_to)
+    queryset = (
+        Sale.objects.for_company(company)
+        .filter(status=Sale.Status.CONFIRMED)
+        .prefetch_related("items")
+        .order_by("-sold_at")
+    )
+    if inicio is not None:
+        queryset = queryset.filter(sold_at__gte=inicio)
+    if fin is not None:
+        queryset = queryset.filter(sold_at__lt=fin)
+    return [
+        {
+            "id": venta.id,
+            "sold_at": venta.sold_at.isoformat(),
+            "customer_name": venta.customer_name,
+            "total": str(venta.total),
+            "status": venta.status,
+            "items": [
+                {
+                    "id": item.id,
+                    "product": item.product_id,
+                    "quantity": str(item.quantity),
+                    "unit_price": str(item.unit_price),
+                    "subtotal": str(item.subtotal),
+                }
+                for item in venta.items.all()
+            ],
+        }
+        for venta in queryset[:limit]
+    ]
+
+
 def consultar_ventas_producto(*, company, product):
     """Tool Layer de solo lectura: cuánto se vendió de UN producto
     puntual, hoy y en la semana (misma estructura que consultar_ventas,

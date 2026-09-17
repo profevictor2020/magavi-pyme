@@ -1341,3 +1341,63 @@ puramente de prompt (nuevo ejemplo + contexto de catálogo ampliado) y
 de presentación en el frontend (mostrar un campo que el backend ya
 devolvía). Sigue siendo honesto sobre la limitación real: no hay
 notificación proactiva, solo un estado consultable.
+
+---
+
+## ADR-026 — Intent `consultar_detalle_ventas`: el detalle por venta, no solo el total
+
+**Contexto:** probando en vivo, después de ver "Este mes: $11.400 (3
+ventas)" (de `consultar_ventas_periodo`), "detállame esas ventas" cayó
+en `no_entendido` — el propio motivo lo explicó bien: "no tengo el
+detalle de ventas individuales... solo el total y la cantidad...
+necesitaría ejecutar una consulta que entregue el listado de ventas,
+pero no existe un intent para listar ventas una por una". A diferencia
+de ADR-025 (donde la capacidad ya existía y solo faltaba el
+reconocimiento en el prompt), acá el diagnóstico del propio modelo era
+correcto: el gap era real. `consultar_ventas`/`consultar_ventas_periodo`
+solo agregan (`Sum`/`Count`); no existía ningún intent que devolviera
+cada venta por separado — el mismo patrón que ya tiene
+`consultar_gastos` para egresos, pero nunca se construyó el equivalente
+para ventas.
+
+**Decisión:** se agrega `sales.services.listar_ventas(company, period,
+date_from, date_to, limit)` y el intent `consultar_detalle_ventas`:
+cada fila trae id, fecha, cliente, total y el desglose de ítems
+(producto, cantidad, precio unitario, subtotal) — la misma forma que ya
+devuelve `crear_venta` para una venta individual (`SaleSerializer`),
+así que el frontend reutiliza sus tipos existentes (`ReceiptLike`) en
+vez de inventar una forma nueva: solo se agregó `isReceiptList` (un
+array de `ReceiptLike`) a `resultShapes.ts`. Mismas reglas de
+`period`/`date_from`/`date_to` que `consultar_gastos`/
+`consultar_ventas_periodo` (ver ADR-022), para que "detállame esas
+ventas de este mes" también funcione. En el `SYSTEM_PROMPT` se aclara
+la frontera con `consultar_ventas_periodo`: si el usuario solo
+pregunta CUÁNTO vendió, sin pedir ver cada venta, sigue siendo el
+intent agregado — este nuevo intent es solo para cuando pide el
+detalle explícitamente.
+
+**Por qué reutilizar `ReceiptLike` en vez de una forma nueva:** una
+venta con su desglose de ítems ya es exactamente lo que `crear_venta`
+devuelve tras confirmarse; no había ninguna razón para que "la misma
+venta, vista después" tuviera una forma de datos distinta a "la misma
+venta, recién creada". Reutilizar evita duplicar la lógica de
+render/voz de ítems (`Producto #N · cantidad × precio = subtotal`) que
+ya existía y estaba probada.
+
+**Nota sobre la ambigüedad de arrays vacíos:** `isReceiptList` se
+revisa DESPUÉS de las demás formas en lista (`isProductList`,
+`isLowStockList`, `isTopSellingList`, `isExpenseList`) tanto en
+`ResultView` como en `describeResultForSpeech`, porque un array vacío
+`[]` no trae ninguna pista de qué forma es — coincide con la
+ambigüedad ya existente y documentada entre esas cuatro formas (la
+primera del `if/else` gana). Se prioriza no alterar el mensaje que ya
+mostraban esas formas para el caso vacío, aceptando que "sin ventas"
+puede mostrar por accidente "sin productos en el catálogo" si el
+array llega vacío — mismo trade-off ya tolerado por el código
+existente, no uno nuevo introducido por esta ADR.
+
+**Consecuencias:** nuevo intent de solo lectura, sin cambios de base
+de datos. `listar_ventas` reutiliza `resolve_period_range` (ADR-022),
+sin lógica de fechas nueva. El frontend gana `isReceiptList` y un
+nuevo caso en `ResultView`/`describeResultForSpeech`; no se tocó
+`ReceiptLike` ni la forma que ya usan compras/ventas individuales.

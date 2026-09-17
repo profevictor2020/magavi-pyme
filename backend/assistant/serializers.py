@@ -97,6 +97,10 @@ class ConsultarVentasPeriodoIntentSerializer(PeriodParamsSerializer):
     pass
 
 
+class ConsultarDetalleVentasIntentSerializer(PeriodParamsSerializer):
+    pass
+
+
 class ActualizarGastoIntentSerializer(serializers.Serializer):
     cash_movement_id = serializers.IntegerField()
     amount = serializers.DecimalField(

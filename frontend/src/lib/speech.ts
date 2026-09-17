@@ -16,6 +16,7 @@ import {
   isProductList,
   isProductSalesSummary,
   isReceipt,
+  isReceiptList,
   isSalesPeriodTotal,
   isTopSellingList,
 } from './resultShapes'
@@ -254,6 +255,16 @@ export function describeResultForSpeech(result: unknown): string {
     if (result.length === 0) return 'No hay gastos registrados.'
     const total = result.reduce((sum, e) => sum + Number(e.amount), 0)
     return `Tienes ${result.length} gastos registrados, por ${formatCLPSpoken(total)} en total.`
+  }
+
+  if (isReceiptList(result)) {
+    // Se revisa al final, después de las demás formas en lista: un
+    // array vacío es ambiguo entre todas ellas (ver isProductList
+    // arriba), así que el orden decide qué mensaje gana — se prioriza
+    // mantener el mensaje ya existente para las formas más antiguas.
+    if (result.length === 0) return 'No hay ventas registradas.'
+    const montos = result.map((venta) => formatCLPSpoken(venta.total))
+    return `Tienes ${result.length} ventas: ${joinWithRemainder(montos, result.length)}.`
   }
 
   return ''

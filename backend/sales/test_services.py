@@ -17,6 +17,7 @@ from .services import (
     consultar_ventas_periodo,
     consultar_ventas_producto,
     crear_venta,
+    listar_ventas,
     productos_mas_vendidos,
 )
 
@@ -351,3 +352,85 @@ class ConsultarVentasPeriodoTests(TestCase):
 
         self.assertEqual(resultado["count"], 0)
         self.assertEqual(resultado["total"], "0.00")
+
+
+class ListarVentasTests(TestCase):
+    """Ver docs/DECISIONS.md ADR-026: a diferencia de
+    consultar_ventas/consultar_ventas_periodo (solo el total agregado),
+    esta da el detalle de cada venta — "detállame esas ventas"."""
+
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+        self.product = ProductFactory(company=self.company, current_stock=Decimal("100"))
+
+    def test_vacio_sin_ventas_registradas(self):
+        self.assertEqual(listar_ventas(company=self.company), [])
+
+    def test_incluye_id_fecha_cliente_total_e_items(self):
+        venta = crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": self.product, "quantity": Decimal("2")}],
+            customer_name="Juan",
+        )
+
+        resultado = listar_ventas(company=self.company)
+
+        self.assertEqual(len(resultado), 1)
+        fila = resultado[0]
+        self.assertEqual(fila["id"], venta.id)
+        self.assertEqual(fila["customer_name"], "Juan")
+        self.assertEqual(fila["total"], str(venta.total))
+        self.assertEqual(len(fila["items"]), 1)
+        self.assertEqual(fila["items"][0]["product"], self.product.id)
+        self.assertEqual(fila["items"][0]["quantity"], "2.000")
+
+    def test_mas_recientes_primero(self):
+        primera = crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": self.product, "quantity": Decimal("1")}],
+        )
+        segunda = crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": self.product, "quantity": Decimal("1")}],
+        )
+
+        resultado = listar_ventas(company=self.company)
+
+        self.assertEqual(resultado[0]["id"], segunda.id)
+        self.assertEqual(resultado[1]["id"], primera.id)
+
+    def test_period_mes_excluye_ventas_de_meses_anteriores(self):
+        mes_pasado = timezone.localtime().replace(day=1) - timezone.timedelta(days=1)
+        venta_vieja = crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": self.product, "quantity": Decimal("1")}],
+        )
+        Sale.objects.filter(pk=venta_vieja.id).update(sold_at=mes_pasado)
+        venta_de_este_mes = crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": self.product, "quantity": Decimal("1")}],
+        )
+
+        resultado = listar_ventas(company=self.company, period="mes")
+
+        ids = [v["id"] for v in resultado]
+        self.assertIn(venta_de_este_mes.id, ids)
+        self.assertNotIn(venta_vieja.id, ids)
+
+    def test_excluye_ventas_de_otras_empresas(self):
+        other_company = CompanyFactory()
+        other_user = UserFactory()
+        other_product = ProductFactory(company=other_company, current_stock=Decimal("10"))
+        crear_venta(
+            company=other_company,
+            user=other_user,
+            items=[{"product": other_product, "quantity": Decimal("5")}],
+        )
+
+        self.assertEqual(listar_ventas(company=self.company), [])

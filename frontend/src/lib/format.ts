@@ -83,6 +83,7 @@ const INTENT_LABELS: Record<string, string> = {
   consultar_gastos: 'Consultar gastos',
   consultar_ventas: 'Consultar ventas',
   consultar_ventas_periodo: 'Consultar ventas de un período',
+  consultar_detalle_ventas: 'Consultar detalle de ventas',
   consultar_ventas_producto: 'Consultar ventas de un producto',
   consultar_productos_mas_vendidos: 'Consultar productos más vendidos',
   consultar_stock_bajo: 'Consultar stock bajo',

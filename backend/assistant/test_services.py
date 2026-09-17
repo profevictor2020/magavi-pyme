@@ -213,6 +213,30 @@ class ProponerIntentTests(TestCase):
         self.assertEqual(resultado["status"], "executed")
         self.assertEqual(resultado["result"], [])
 
+    def test_consultar_detalle_ventas_executes_immediately(self):
+        # Ver docs/DECISIONS.md ADR-026: "detállame esas ventas" cayó en
+        # no_entendido porque no existía un intent para el detalle por
+        # venta (solo el total agregado, consultar_ventas_periodo).
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="consultar_detalle_ventas",
+            raw_parameters={},
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"], [])
+
+    def test_consultar_detalle_ventas_acepta_period(self):
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="consultar_detalle_ventas",
+            raw_parameters={"period": "mes"},
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+
     def test_consultar_productos_mas_vendidos_executes_immediately(self):
         resultado = proponer_intent(
             company=self.company,
