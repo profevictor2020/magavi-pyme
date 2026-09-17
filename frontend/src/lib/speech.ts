@@ -168,12 +168,14 @@ export function describeResultForSpeech(result: unknown): string {
   }
 
   if (isLowStockList(result)) {
+    // Esta forma ahora solo la genera consultar_stock_bajo (alerta real
+    // de stock bajo) — la consulta de UN producto puntual usa isProduct
+    // (ver consultar_producto), así que aquí no hace falta un caso
+    // especial "neutro" para un solo elemento.
     if (result.length === 0) return 'No hay productos con stock bajo.'
     if (result.length === 1) {
-      // Un solo elemento suele venir de "¿cuánto stock tengo de X?", no
-      // de una alerta de stock bajo — se lee neutro, no como alarma.
       const [product] = result
-      return `${product.name}: ${formatQuantity(product.current_stock)} en stock.`
+      return `1 producto con stock bajo: ${product.name}.`
     }
     const nombres = result.map((p) => p.name)
     return `${result.length} productos con stock bajo: ${joinWithRemainder(nombres, result.length)}.`

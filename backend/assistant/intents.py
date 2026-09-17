@@ -28,7 +28,7 @@ from sales.services import consultar_ventas, crear_venta
 from .serializers import (
     ActualizarProductoIntentSerializer,
     AjustarInventarioIntentSerializer,
-    ConsultarStockProductoIntentSerializer,
+    ConsultarProductoIntentSerializer,
     CrearProductoIntentSerializer,
     EmptyParamsSerializer,
 )
@@ -118,19 +118,23 @@ def _ejecutar_consultar_catalogo(*, company, user, params):
     return listar_productos(company=company)
 
 
-def _ejecutar_consultar_stock_producto(*, company, user, params):
-    # Misma forma que un elemento de consultar_stock_bajo (envuelto en una
-    # lista de un solo ítem): reutiliza el mismo render en el frontend
-    # (ResultView) sin necesitar un caso nuevo.
+def _ejecutar_consultar_producto(*, company, user, params):
+    # Un solo objeto (no una lista): misma forma que crear_producto/
+    # actualizar_producto, para que el frontend (isProduct en
+    # resultShapes.ts) lo renderice/lea igual sin necesitar un caso
+    # nuevo. Devuelve TODOS los datos del producto (no solo stock o solo
+    # precio) porque esta consulta es genérica — "¿cuánto stock tengo de
+    # X?" y "¿cuál es el precio de X?" son la misma pregunta de fondo
+    # ("cuéntame de este producto puntual"), ver SYSTEM_PROMPT.
     product = get_product_or_raise(company=company, product_id=params["product_id"])
-    return [
-        {
-            "id": product.id,
-            "name": product.name,
-            "current_stock": str(product.current_stock),
-            "low_stock_threshold": str(product.low_stock_threshold),
-        }
-    ]
+    return {
+        "id": product.id,
+        "name": product.name,
+        "unit": product.unit,
+        "current_stock": str(product.current_stock),
+        "low_stock_threshold": str(product.low_stock_threshold),
+        "default_price": str(product.default_price),
+    }
 
 
 @dataclass(frozen=True)
@@ -158,8 +162,8 @@ INTENTS: dict[str, IntentDefinition] = {
     "consultar_stock_bajo": IntentDefinition(
         EmptyParamsSerializer, False, _ejecutar_consultar_stock_bajo
     ),
-    "consultar_stock_producto": IntentDefinition(
-        ConsultarStockProductoIntentSerializer, False, _ejecutar_consultar_stock_producto
+    "consultar_producto": IntentDefinition(
+        ConsultarProductoIntentSerializer, False, _ejecutar_consultar_producto
     ),
     "consultar_catalogo": IntentDefinition(
         EmptyParamsSerializer, False, _ejecutar_consultar_catalogo

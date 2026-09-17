@@ -17,7 +17,7 @@ class AjustarInventarioIntentSerializer(AdjustStockSerializer):
     product_id = serializers.IntegerField()
 
 
-class ConsultarStockProductoIntentSerializer(serializers.Serializer):
+class ConsultarProductoIntentSerializer(serializers.Serializer):
     product_id = serializers.IntegerField()
 
 

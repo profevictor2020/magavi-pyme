@@ -89,11 +89,28 @@ describe('describeResultForSpeech', () => {
     expect(describeResultForSpeech([])).toBe('No hay productos en el catálogo.')
   })
 
-  it('describe una consulta de stock de un solo producto en tono neutro', () => {
+  it('describe la consulta de UN producto puntual con precio y stock', () => {
+    // consultar_producto devuelve un objeto (forma isProduct), no una
+    // lista — sirve tanto para "¿cuánto stock tengo de X?" como para
+    // "¿cuál es el precio de X?", ambas preguntas dan la misma respuesta.
+    const text = describeResultForSpeech({
+      id: 1,
+      name: 'Goma',
+      unit: 'unidad',
+      current_stock: '30',
+      low_stock_threshold: '0',
+      default_price: '890',
+    })
+    expect(text).toContain('Goma')
+    expect(text).toContain('890')
+    expect(text).toContain('30')
+  })
+
+  it('describe una alerta de stock bajo de un solo producto', () => {
     const text = describeResultForSpeech([
-      { id: 1, name: 'Lápices de colores', current_stock: '60', low_stock_threshold: '10' },
+      { id: 1, name: 'Lápices de colores', current_stock: '2', low_stock_threshold: '10' },
     ])
-    expect(text).toBe('Lápices de colores: 60 en stock.')
+    expect(text).toBe('1 producto con stock bajo: Lápices de colores.')
   })
 
   it('describe una alerta de stock bajo con varios productos', () => {

@@ -5,6 +5,22 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### `consultar_stock_producto` ahora es `consultar_producto` (también responde precio)
+
+Bug real encontrado probando en vivo: "¿cuál es el precio de la goma?"
+no encontraba ninguna acción específica para UN producto y caía en
+`consultar_catalogo` (la lista completa), mostrando también productos
+que no se habían pedido. La causa: `consultar_stock_producto` solo
+devolvía stock, nunca precio, así que el LLM no tenía otra opción para
+preguntas de precio de un producto puntual. Se generalizó ese intent a
+`consultar_producto`: sigue recibiendo solo `product_id`, pero ahora
+devuelve todos los datos del producto (nombre, unidad, stock, mínimo de
+stock y precio) como UN objeto (no una lista) — misma forma que
+`crear_producto`/`actualizar_producto` (`isProduct`), así el frontend y
+la voz responden con precio y stock juntos sin importar cuál de los dos
+haya preguntado el usuario. `consultar_stock_bajo` (la alerta real de
+stock bajo con varios productos) no cambió.
+
 ### Nuevo intent: actualizar precio/datos de un producto existente
 
 Faltaba poder cambiar el precio (u otro dato) de un producto ya creado

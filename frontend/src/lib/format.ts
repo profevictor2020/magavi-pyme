@@ -38,7 +38,7 @@ const INTENT_LABELS: Record<string, string> = {
   actualizar_producto: 'Actualizar producto',
   consultar_ventas: 'Consultar ventas',
   consultar_stock_bajo: 'Consultar stock bajo',
-  consultar_stock_producto: 'Consultar stock de un producto',
+  consultar_producto: 'Consultar un producto',
   consultar_catalogo: 'Consultar catálogo',
 }
 

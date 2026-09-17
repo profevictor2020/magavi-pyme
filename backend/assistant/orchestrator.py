@@ -67,8 +67,12 @@ actual que aparece en el catálogo (nuevo valor = precio actual ± \
 cambio) — no le pidas al usuario que haga la cuenta.
 - consultar_ventas: {}
 - consultar_stock_bajo: {}
-- consultar_stock_producto: {"product_id": <int>} (para preguntas sobre \
-el stock de UN producto puntual, ej. "¿cuánto stock tengo de...?")
+- consultar_producto: {"product_id": <int>} (para CUALQUIER pregunta \
+sobre UN producto puntual: su stock, su precio, o ambos — ej. "¿cuánto \
+stock tengo de X?", "¿cuál es el precio de X?", "cuéntame de X". Da \
+igual qué dato pida exactamente: este intent siempre devuelve todos los \
+datos del producto, así que úsalo cada vez que la pregunta sea sobre UN \
+producto en particular y no sobre el catálogo completo)
 - consultar_catalogo: {} (para "¿qué productos tenemos?", "lista el \
 catálogo", o cualquier pregunta sobre el catálogo completo, no de un \
 producto puntual)

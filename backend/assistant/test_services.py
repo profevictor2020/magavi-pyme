@@ -57,23 +57,25 @@ class ProponerIntentTests(TestCase):
 
         self.assertEqual(resultado["result"]["today"], {"total": "0.00", "count": 0})
 
-    def test_consultar_stock_producto_executes_immediately(self):
+    def test_consultar_producto_executes_immediately(self):
         resultado = proponer_intent(
             company=self.company,
             user=self.user,
-            intent_name="consultar_stock_producto",
+            intent_name="consultar_producto",
             raw_parameters={"product_id": self.product.id},
         )
 
         self.assertEqual(resultado["status"], "executed")
-        self.assertEqual(resultado["result"], [{
+        self.assertEqual(resultado["result"], {
             "id": self.product.id,
             "name": self.product.name,
+            "unit": self.product.unit,
             "current_stock": "10.000",
             "low_stock_threshold": "0.000",
-        }])
+            "default_price": "2500.00",
+        })
 
-    def test_consultar_stock_producto_de_otra_empresa_es_rechazado(self):
+    def test_consultar_producto_de_otra_empresa_es_rechazado(self):
         other_company = CompanyFactory()
         foreign_product = ProductFactory(company=other_company)
 
@@ -81,7 +83,7 @@ class ProponerIntentTests(TestCase):
             proponer_intent(
                 company=self.company,
                 user=self.user,
-                intent_name="consultar_stock_producto",
+                intent_name="consultar_producto",
                 raw_parameters={"product_id": foreign_product.id},
             )
 
