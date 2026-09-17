@@ -5,6 +5,7 @@ import {
   isPeriodSummary,
   isProduct,
   isProductList,
+  isProductSalesSummary,
   isReceipt,
 } from '../lib/resultShapes'
 
@@ -45,6 +46,24 @@ export function ResultView({ result }: { result: unknown }) {
         </div>
         <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
           Nuevo stock: {formatQuantity(result.balance_after)}
+        </div>
+      </div>
+    )
+  }
+
+  if (isProductSalesSummary(result)) {
+    // Se revisa antes que isPeriodSummary: comparten today/week, pero
+    // esta forma está acotada a un producto (product_id) y cuenta
+    // unidades, no número de ventas.
+    return (
+      <div className="result-card">
+        <strong>{result.product_name}</strong>
+        <div>
+          Hoy: {formatQuantity(result.today.quantity)} vendidas ({formatCLP(result.today.total)})
+        </div>
+        <div>
+          Esta semana: {formatQuantity(result.week.quantity)} vendidas (
+          {formatCLP(result.week.total)})
         </div>
       </div>
     )

@@ -10,7 +10,7 @@ from companies.factories import CompanyFactory
 from inventory.models import InventoryMovement
 
 from .models import Sale
-from .services import crear_venta
+from .services import consultar_ventas_producto, crear_venta
 
 
 class CrearVentaTests(TestCase):
@@ -130,3 +130,63 @@ class CrearVentaTests(TestCase):
                 user=self.user,
                 items=[{"product": foreign_product, "quantity": Decimal("1")}],
             )
+
+
+class ConsultarVentasProductoTests(TestCase):
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+        self.product = ProductFactory(
+            company=self.company, default_price=Decimal("2500.00"), current_stock=Decimal("10")
+        )
+
+    def test_zero_when_nothing_sold(self):
+        resultado = consultar_ventas_producto(company=self.company, product=self.product)
+
+        self.assertEqual(resultado["product_id"], self.product.id)
+        self.assertEqual(resultado["today"], {"quantity": "0.000", "total": "0.00"})
+        self.assertEqual(resultado["week"], {"quantity": "0.000", "total": "0.00"})
+
+    def test_sums_quantity_and_total_of_multiple_sales(self):
+        crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": self.product, "quantity": Decimal("3")}],
+        )
+        crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": self.product, "quantity": Decimal("2")}],
+        )
+
+        resultado = consultar_ventas_producto(company=self.company, product=self.product)
+
+        self.assertEqual(resultado["today"]["quantity"], "5.000")
+        self.assertEqual(resultado["today"]["total"], "12500.00")
+        self.assertEqual(resultado["week"]["quantity"], "5.000")
+
+    def test_ignores_sales_of_other_products(self):
+        other_product = ProductFactory(company=self.company, current_stock=Decimal("10"))
+        crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": other_product, "quantity": Decimal("4")}],
+        )
+
+        resultado = consultar_ventas_producto(company=self.company, product=self.product)
+
+        self.assertEqual(resultado["today"]["quantity"], "0.000")
+
+    def test_ignores_sales_from_other_companies(self):
+        other_company = CompanyFactory()
+        other_user = UserFactory()
+        foreign_product = ProductFactory(company=other_company, current_stock=Decimal("10"))
+        crear_venta(
+            company=other_company,
+            user=other_user,
+            items=[{"product": foreign_product, "quantity": Decimal("9")}],
+        )
+
+        resultado = consultar_ventas_producto(company=self.company, product=self.product)
+
+        self.assertEqual(resultado["today"]["quantity"], "0.000")

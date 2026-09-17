@@ -114,3 +114,32 @@ def consultar_ventas(*, company):
         }
 
     return {"today": summarize(today_start), "week": summarize(week_start)}
+
+
+def consultar_ventas_producto(*, company, product):
+    """Tool Layer de solo lectura: cuánto se vendió de UN producto
+    puntual, hoy y en la semana (misma estructura que consultar_ventas,
+    pero por cantidad de unidades en vez de solo el total en dinero).
+    Para "¿cuántas gomas hemos vendido?" — consultar_ventas no sirve
+    porque agrega TODAS las ventas, no filtra por producto.
+    """
+    today_start, week_start = today_and_week_start()
+    base = SaleItem.objects.filter(
+        product=product, sale__company=company, sale__status=Sale.Status.CONFIRMED
+    )
+
+    def summarize(since):
+        aggregate = base.filter(sale__sold_at__gte=since).aggregate(
+            quantity=Sum("quantity"), total=Sum("subtotal")
+        )
+        return {
+            "quantity": str(aggregate["quantity"] or Decimal("0.000")),
+            "total": str(aggregate["total"] or Decimal("0.00")),
+        }
+
+    return {
+        "product_id": product.id,
+        "product_name": product.name,
+        "today": summarize(today_start),
+        "week": summarize(week_start),
+    }

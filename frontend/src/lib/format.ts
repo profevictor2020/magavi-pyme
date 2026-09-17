@@ -9,6 +9,19 @@ export function formatCLP(amount: string | number | null | undefined): string {
   }).format(value)
 }
 
+/** Para leer un monto en voz alta (ver lib/speech.ts): el "$" de
+ * formatCLP es la convención correcta para mostrar en pantalla, pero al
+ * hablarlo un sintetizador de voz puede leerlo como "dólares" en vez de
+ * pesos chilenos (el símbolo "$" no es exclusivo de CLP). Dice "pesos"
+ * explícito para que no quede ambiguo. */
+export function formatCLPSpoken(amount: string | number | null | undefined): string {
+  if (amount === null || amount === undefined) return ''
+  const value = typeof amount === 'string' ? Number(amount) : amount
+  if (Number.isNaN(value)) return String(amount)
+  const monto = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(value)
+  return `${monto} pesos`
+}
+
 /** El backend guarda cantidades/stock como decimal con 3 dígitos
  * (soporta kg/lt fraccionarios), pero mostrar "10.000" para algo en
  * unidades es confuso. Recorta los ceros que sobran sin perder un
@@ -37,6 +50,7 @@ const INTENT_LABELS: Record<string, string> = {
   crear_producto: 'Crear producto',
   actualizar_producto: 'Actualizar producto',
   consultar_ventas: 'Consultar ventas',
+  consultar_ventas_producto: 'Consultar ventas de un producto',
   consultar_stock_bajo: 'Consultar stock bajo',
   consultar_producto: 'Consultar un producto',
   consultar_catalogo: 'Consultar catálogo',

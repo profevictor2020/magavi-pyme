@@ -5,6 +5,23 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nuevo intent: ventas de UN producto puntual + la voz ahora dice "pesos"
+
+Dos bugs reales encontrados probando en vivo:
+
+- "¿cuántas gomas hemos vendido?" caía en `consultar_ventas`, que suma
+  TODAS las ventas de la empresa sin filtrar por producto — la
+  respuesta no tenía nada que ver con la goma. Nuevo
+  `consultar_ventas_producto` (`sales/services.py`): unidades y $
+  vendidos de un producto puntual, hoy y en la semana, misma
+  estructura que `consultar_ventas` pero por producto.
+- La voz leía los montos como los ve el ojo ("$3.000"), pero un
+  sintetizador de voz puede leer el símbolo "$" como "dólares" en vez
+  de pesos chilenos — el símbolo no es exclusivo de CLP. Nuevo
+  `formatCLPSpoken` (`lib/format.ts`): dice "3.000 pesos" explícito.
+  Se usa solo en `speech.ts` (lo que se ve en pantalla sigue mostrando
+  "$3.000", que sí es la convención correcta ahí).
+
 ### `consultar_stock_producto` ahora es `consultar_producto` (también responde precio)
 
 Bug real encontrado probando en vivo: "¿cuál es el precio de la goma?"

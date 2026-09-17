@@ -176,6 +176,19 @@ class InterpretarYProponerTests(TestCase):
         # hasta que se confirme (ver assistant/test_services.py).
         self.assertNotEqual(self.product.default_price, Decimal("890.00"))
 
+    def test_mensaje_de_ventas_de_un_producto_se_ejecuta_de_inmediato(self):
+        llm = FakeLLMProvider([_json("consultar_ventas_producto", {"product_id": self.product.id})])
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="cuántas gomas hemos vendido",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"]["product_id"], self.product.id)
+
     def test_intent_con_producto_de_otra_empresa_no_se_ejecuta(self):
         other_company = CompanyFactory()
         foreign_product = ProductFactory(company=other_company, current_stock=Decimal("10"))

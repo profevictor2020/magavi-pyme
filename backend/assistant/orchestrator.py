@@ -65,14 +65,21 @@ en cambio da un cambio relativo ("sube el precio de X en 100", "bájale \
 50 al precio de Y"), calcula tú el nuevo valor final usando el precio \
 actual que aparece en el catálogo (nuevo valor = precio actual ± \
 cambio) — no le pidas al usuario que haga la cuenta.
-- consultar_ventas: {}
+- consultar_ventas: {} (total vendido HOY y esta semana, sumando TODOS \
+los productos — ej. "¿cuánto vendí hoy?", "¿cómo van las ventas de la \
+semana?". Si la pregunta es sobre cuánto se vendió de un producto \
+puntual, usa consultar_ventas_producto en vez de este)
+- consultar_ventas_producto: {"product_id": <int>} (cuántas unidades se \
+vendieron de UN producto puntual, hoy y esta semana — ej. "¿cuántas \
+gomas hemos vendido?", "¿cuánto vendí de X esta semana?")
 - consultar_stock_bajo: {}
-- consultar_producto: {"product_id": <int>} (para CUALQUIER pregunta \
-sobre UN producto puntual: su stock, su precio, o ambos — ej. "¿cuánto \
-stock tengo de X?", "¿cuál es el precio de X?", "cuéntame de X". Da \
-igual qué dato pida exactamente: este intent siempre devuelve todos los \
-datos del producto, así que úsalo cada vez que la pregunta sea sobre UN \
-producto en particular y no sobre el catálogo completo)
+- consultar_producto: {"product_id": <int>} (para preguntas sobre el \
+STOCK o PRECIO de UN producto puntual, no sobre cuánto se ha vendido de \
+él — ej. "¿cuánto stock tengo de X?", "¿cuál es el precio de X?", \
+"cuéntame de X". Da igual qué dato pida exactamente: este intent \
+siempre devuelve todos los datos del producto, así que úsalo cada vez \
+que la pregunta sea sobre stock/precio de UN producto en particular y \
+no sobre el catálogo completo)
 - consultar_catalogo: {} (para "¿qué productos tenemos?", "lista el \
 catálogo", o cualquier pregunta sobre el catálogo completo, no de un \
 producto puntual)

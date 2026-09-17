@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { formatCLPSpoken } from './format'
 import { describeResultForSpeech, matchYesNo } from './speech'
 
 describe('matchYesNo', () => {
@@ -20,6 +21,14 @@ describe('matchYesNo', () => {
   })
 })
 
+describe('formatCLPSpoken', () => {
+  it('dice "pesos" en vez de depender del símbolo "$" (que un sintetizador \
+puede leer como dólares)', () => {
+    expect(formatCLPSpoken(3000)).toBe('3.000 pesos')
+    expect(formatCLPSpoken('890')).toBe('890 pesos')
+  })
+})
+
 describe('describeResultForSpeech', () => {
   it('describe una venta registrada', () => {
     const text = describeResultForSpeech({
@@ -30,6 +39,7 @@ describe('describeResultForSpeech', () => {
       items: [],
     })
     expect(text).toContain('Venta registrada')
+    expect(text).toContain('pesos')
   })
 
   it('describe una compra registrada', () => {
@@ -61,6 +71,22 @@ describe('describeResultForSpeech', () => {
       week: { total: '50000', count: 12 },
     })
     expect(text).toContain('3 ventas')
+    expect(text).toContain('pesos')
+  })
+
+  it('describe cuánto se vendió de UN producto puntual (no el total general)', () => {
+    // Distinta forma del resumen de periodo (tiene product_id) — debe
+    // hablar de unidades vendidas de ESE producto, no de "N ventas" en
+    // general (ver isProductSalesSummary en resultShapes.ts).
+    const text = describeResultForSpeech({
+      product_id: 1,
+      product_name: 'Goma',
+      today: { quantity: '5.000', total: '4450.00' },
+      week: { quantity: '5.000', total: '4450.00' },
+    })
+    expect(text).toContain('Goma')
+    expect(text).toContain('5')
+    expect(text).toContain('pesos')
   })
 
   it('describe un producto recién creado', () => {
@@ -73,6 +99,7 @@ describe('describeResultForSpeech', () => {
     })
     expect(text).toContain('Lápices de colores')
     expect(text).toContain('60')
+    expect(text).toContain('pesos')
   })
 
   it('describe una lista de productos del catálogo', () => {
@@ -104,6 +131,7 @@ describe('describeResultForSpeech', () => {
     expect(text).toContain('Goma')
     expect(text).toContain('890')
     expect(text).toContain('30')
+    expect(text).toContain('pesos')
   })
 
   it('describe una alerta de stock bajo de un solo producto', () => {

@@ -34,6 +34,13 @@ export interface PeriodSummaryLike {
   week: { total: string; count: number }
 }
 
+export interface ProductSalesSummaryLike {
+  product_id: number
+  product_name: string
+  today: { quantity: string; total: string }
+  week: { quantity: string; total: string }
+}
+
 export interface LowStockLike {
   id: number
   name: string
@@ -63,7 +70,19 @@ export function isMovement(value: unknown): value is MovementLike {
 }
 
 export function isPeriodSummary(value: unknown): value is PeriodSummaryLike {
-  return !!value && typeof value === 'object' && 'today' in value && 'week' in value
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'today' in value &&
+    'week' in value &&
+    !('product_id' in value)
+  )
+}
+
+export function isProductSalesSummary(value: unknown): value is ProductSalesSummaryLike {
+  // Misma forma de fondo que PeriodSummaryLike (today/week), pero
+  // acotada a UN producto — "product_id" es lo que las distingue.
+  return !!value && typeof value === 'object' && 'product_id' in value && 'today' in value
 }
 
 export function isLowStockList(value: unknown): value is LowStockLike[] {

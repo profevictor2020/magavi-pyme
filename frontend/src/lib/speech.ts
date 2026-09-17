@@ -5,13 +5,14 @@
 // audio al servidor del fabricante para transcribirlo. Es una excepción
 // documentada y acotada, igual que DeepSeek en ADR-010: no reemplaza el
 // plan de un motor de voz autoalojado (Whisper) para producción real.
-import { formatCLP, formatQuantity } from './format'
+import { formatCLPSpoken, formatQuantity } from './format'
 import {
   isLowStockList,
   isMovement,
   isPeriodSummary,
   isProduct,
   isProductList,
+  isProductSalesSummary,
   isReceipt,
 } from './resultShapes'
 
@@ -141,22 +142,30 @@ function joinWithRemainder(names: string[], total: number): string {
 export function describeResultForSpeech(result: unknown): string {
   if (isReceipt(result)) {
     const isSale = 'sold_at' in result
-    return `${isSale ? 'Venta' : 'Compra'} registrada por ${formatCLP(result.total)}.`
+    return `${isSale ? 'Venta' : 'Compra'} registrada por ${formatCLPSpoken(result.total)}.`
   }
 
   if (isMovement(result)) {
     return `Movimiento registrado. Nuevo stock: ${formatQuantity(result.balance_after)}.`
   }
 
+  if (isProductSalesSummary(result)) {
+    // Antes que isPeriodSummary: ver resultShapes.ts.
+    return (
+      `Hoy vendiste ${formatQuantity(result.today.quantity)} de ${result.product_name}, ` +
+      `por ${formatCLPSpoken(result.today.total)}.`
+    )
+  }
+
   if (isPeriodSummary(result)) {
-    return `Hoy vendiste ${formatCLP(result.today.total)} en ${result.today.count} ventas.`
+    return `Hoy vendiste ${formatCLPSpoken(result.today.total)} en ${result.today.count} ventas.`
   }
 
   if (isProduct(result)) {
     // Misma forma para crear_producto y actualizar_producto (ver
     // ResultView) — frase neutra, no dice "creado" ni "actualizado".
     return (
-      `${result.name}: precio ${formatCLP(result.default_price)}, ` +
+      `${result.name}: precio ${formatCLPSpoken(result.default_price)}, ` +
       `stock ${formatQuantity(result.current_stock)}.`
     )
   }
