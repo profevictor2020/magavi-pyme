@@ -91,6 +91,37 @@ export function listenOnce(): Promise<string> {
   })
 }
 
+/** Los textos armados en el frontend (describeResultForSpeech,
+ * formatCLPSpoken) ya vienen sin "$" ni "CLP" — pero desde el intent
+ * "responder"/"no_entendido" (ver ADR-021, orchestrator.py) el texto
+ * que se lee es libre, generado por el LLM, y este sigue escribiendo
+ * montos como "$18.500" o "$18.500 CLP" (la forma correcta para
+ * MOSTRAR en pantalla). Un sintetizador de voz lee ese "$" como
+ * "dólares" sin importar el idioma/locale de la utterance — bug real
+ * reportado en vivo: "no son dólares son pesos" incluso después de
+ * que el propio texto dijera "pesos chilenos" y "CLP", porque el "$"
+ * seguía ahí y el sintetizador lo prioriza sobre las palabras. Por
+ * eso cualquier texto que se vaya a hablar pasa por acá, sin importar
+ * de dónde venga, para reemplazar el monto completo por su forma
+ * hablada ("18500 pesos") antes de llegar a SpeechSynthesisUtterance. */
+// \d{1,3}(?:[.,]\d{3})* — grupos de miles reales (ej. "18.500"), a
+// diferencia de \d[\d.,]* que también se comería un punto final de
+// oración ("...$18.500." quedaría "18500 pesos" sin el punto).
+const CLP_AMOUNT = String.raw`\d{1,3}(?:[.,]\d{3})*`
+
+export function sanitizeAmountsForSpeech(text: string): string {
+  if (!text) return text
+  return text
+    .replace(
+      new RegExp(String.raw`\$\s?(${CLP_AMOUNT})(\s?CLP\b)?`, 'gi'),
+      (_match, amount: string) => `${amount.replace(/[.,]/g, '')} pesos`,
+    )
+    .replace(
+      new RegExp(String.raw`(${CLP_AMOUNT})\s?CLP\b`, 'gi'),
+      (_match, amount: string) => `${amount.replace(/[.,]/g, '')} pesos`,
+    )
+}
+
 /** Lee un texto en voz alta. No hace nada (resuelve de inmediato) si el
  * navegador no soporta síntesis de voz — nunca bloquea el flujo normal
  * de texto. */
@@ -101,7 +132,7 @@ export function speak(text: string): Promise<void> {
       return
     }
     window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(text)
+    const utterance = new SpeechSynthesisUtterance(sanitizeAmountsForSpeech(text))
     utterance.lang = SPEECH_LANG
     utterance.onend = () => resolve()
     utterance.onerror = () => resolve()

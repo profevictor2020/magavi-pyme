@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { formatCLPSpoken } from './format'
-import { describeResultForSpeech, matchYesNo } from './speech'
+import { describeResultForSpeech, matchYesNo, sanitizeAmountsForSpeech } from './speech'
 
 describe('matchYesNo', () => {
   it('reconoce afirmaciones con distintas palabras y mayúsculas/acentos', () => {
@@ -32,6 +32,41 @@ formatCLP como punto decimal, no como separador ("7.000" se escucha \
 como "7", no "siete mil")', () => {
     expect(formatCLPSpoken(7000)).toBe('7000 pesos')
     expect(formatCLPSpoken('10000')).toBe('10000 pesos')
+  })
+})
+
+describe('sanitizeAmountsForSpeech', () => {
+  // Bug real reportado en vivo: el texto libre del intent "responder"
+  // (ADR-021) trae montos como "$18.500" o "$18.500 CLP" — la forma
+  // correcta para MOSTRAR en pantalla, pero un sintetizador de voz lee
+  // el "$" como "dólares" sin importar el resto del texto (incluso si
+  // ya dice "pesos chilenos" o "CLP" al lado).
+  it('reemplaza "$18.500" por "18500 pesos"', () => {
+    expect(sanitizeAmountsForSpeech('Ese gasto es por $18.500 en total.')).toBe(
+      'Ese gasto es por 18500 pesos en total.',
+    )
+  })
+
+  it('reemplaza "$18.500 CLP" por "18500 pesos", sin duplicar la unidad', () => {
+    expect(sanitizeAmountsForSpeech('El monto es de $18.500 CLP.')).toBe('El monto es de 18500 pesos.')
+  })
+
+  it('reemplaza un monto seguido de "CLP" sin símbolo "$"', () => {
+    expect(sanitizeAmountsForSpeech('Son 18.500 CLP exactos.')).toBe('Son 18500 pesos exactos.')
+  })
+
+  it('no se come el punto final de la oración cuando el monto termina la frase', () => {
+    expect(sanitizeAmountsForSpeech('El total es $18.500.')).toBe('El total es 18500 pesos.')
+  })
+
+  it('reemplaza varios montos en el mismo texto', () => {
+    expect(sanitizeAmountsForSpeech('Antes era $1.000 y ahora es $2.500.')).toBe(
+      'Antes era 1000 pesos y ahora es 2500 pesos.',
+    )
+  })
+
+  it('deja igual un texto sin montos', () => {
+    expect(sanitizeAmountsForSpeech('No hay gastos registrados.')).toBe('No hay gastos registrados.')
   })
 })
 

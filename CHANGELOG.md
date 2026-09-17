@@ -5,6 +5,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### La voz seguía diciendo "dólares" en las respuestas del intent "responder"
+
+Bug encontrado en vivo justo después del punto anterior: el fix de
+`formatCLPSpoken` (ver más abajo) evita que el sintetizador de voz lea
+"$" como dólares, pero solo se aplicaba a los montos que el frontend
+arma él mismo a partir del resultado estructurado (`describeResultForSpeech`).
+El texto libre del intent "responder" (ej. "Ese gasto de servicios por
+$18.500 no tiene descripción...") lo genera el LLM como texto natural,
+con el mismo "$18.500" que es correcto para MOSTRAR en pantalla — y
+ese texto se leía en voz alta tal cual, sin pasar por ningún
+formateador. El sintetizador seguía diciendo "dólares" aunque el
+propio texto ya dijera "pesos chilenos" o "CLP" al lado, porque el "$"
+pesa más que las palabras alrededor.
+
+Se agregó `sanitizeAmountsForSpeech` en `lib/speech.ts`, que reemplaza
+cualquier monto con "$" y/o "CLP" (venga de donde venga el texto) por
+su forma hablada ("18500 pesos") justo antes de mandarlo a
+`SpeechSynthesisUtterance` — así `speak()` queda seguro para cualquier
+texto, ya sea armado por el frontend o generado libremente por el LLM,
+sin tener que acordarse de sanitizar cada punto de llamada por
+separado.
+
 ### Nueva respuesta "responder": el asistente ya puede contestar sin ejecutar una acción
 
 Bug encontrado en vivo, justo después de arreglar la memoria
