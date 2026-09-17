@@ -5,6 +5,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Interacción por voz en el chat (hablar, escuchar y confirmar)
+
+El chat ya permitía confirmar/cancelar una propuesta con botones; ahora
+también se puede hacer todo por voz, de punta a punta. Nuevo módulo
+`frontend/src/lib/speech.ts`: `listenOnce()` (reconocimiento de voz),
+`speak()` (síntesis de voz) y `describeResultForSpeech()` (resumen
+hablado del resultado de un intent, reutilizando las mismas formas de
+`resultShapes.ts` que ya usaba `ResultView` — se extrajeron a un
+archivo compartido para no duplicar la detección). Al hablar por el
+micrófono nuevo (`ChatPage.tsx`), si la respuesta requiere confirmación
+el asistente primero **pregunta en voz alta** y luego **vuelve a
+escuchar** la respuesta — no basta con que el usuario recuerde tocar un
+botón. La interpretación de "sí"/"no" (`matchYesNo()`) es matching
+local de palabras clave, nunca pasa por el LLM, para no debilitar la
+garantía de que toda mutación se confirma de forma determinística. El
+botón de micrófono solo aparece si el navegador soporta
+`SpeechRecognition` — en el resto, el chat funciona exactamente igual
+que antes. Ver ADR-016 para el detalle de la excepción de privacidad
+que implica el reconocimiento de voz (el audio se procesa en el
+servidor del fabricante del navegador, no localmente).
+
 ### Nuevo intent de solo lectura: consultar el catálogo completo
 
 Faltaba responder "¿qué productos tenemos?" — solo existían intents

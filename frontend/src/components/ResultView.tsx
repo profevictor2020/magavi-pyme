@@ -1,75 +1,12 @@
 import { formatCLP, formatQuantity } from '../lib/format'
-
-interface ReceiptLike {
-  id: number
-  total: string
-  status: string
-  items: { id: number; product: number; quantity: string; unit_price?: string; unit_cost?: string; subtotal: string }[]
-  customer_name?: string
-  supplier_name?: string
-  sold_at?: string
-  purchased_at?: string
-}
-
-interface MovementLike {
-  id: number
-  product: number
-  type: string
-  quantity: string
-  balance_after: string
-  reason: string
-}
-
-interface PeriodSummaryLike {
-  today: { total: string; count: number }
-  week: { total: string; count: number }
-}
-
-interface LowStockLike {
-  id: number
-  name: string
-  current_stock: string
-  low_stock_threshold: string
-}
-
-interface ProductLike {
-  id: number
-  name: string
-  unit: string
-  default_price: string
-  current_stock: string
-}
-
-function isReceipt(value: unknown): value is ReceiptLike {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    Array.isArray((value as ReceiptLike).items) &&
-    'total' in value
-  )
-}
-
-function isMovement(value: unknown): value is MovementLike {
-  return !!value && typeof value === 'object' && 'balance_after' in value
-}
-
-function isPeriodSummary(value: unknown): value is PeriodSummaryLike {
-  return !!value && typeof value === 'object' && 'today' in value && 'week' in value
-}
-
-function isLowStockList(value: unknown): value is LowStockLike[] {
-  // "low_stock_threshold" (no solo "current_stock") es lo que distingue
-  // esta forma de isProductList — ambas son arrays de objetos con stock.
-  return Array.isArray(value) && (value.length === 0 || 'low_stock_threshold' in value[0])
-}
-
-function isProduct(value: unknown): value is ProductLike {
-  return !!value && typeof value === 'object' && 'default_price' in value && 'unit' in value
-}
-
-function isProductList(value: unknown): value is ProductLike[] {
-  return Array.isArray(value) && (value.length === 0 || 'default_price' in value[0])
-}
+import {
+  isLowStockList,
+  isMovement,
+  isPeriodSummary,
+  isProduct,
+  isProductList,
+  isReceipt,
+} from '../lib/resultShapes'
 
 /** Renderiza el resultado de un intent ejecutado/confirmado. Cubre las
  * formas conocidas (venta/compra, ajuste de inventario, resúmenes de

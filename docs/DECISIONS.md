@@ -596,3 +596,90 @@ start ~30-50s) — ambos aceptables para una demo, documentados en
 Oracle Cloud da capacidad, ese despliegue pasa a ser el "real" (con
 datos reales de pilotos), y este de Render queda como entorno de
 demo/pruebas permanente, no se retira.
+
+---
+
+## ADR-016 — Interacción por voz en el chat (Web Speech API del navegador)
+
+**Contexto:** el chat ya permite proponer y confirmar/cancelar
+acciones que mutan datos (ventas, compras, ajustes de inventario, alta
+de productos) por texto y con botones. El feedback del usuario fue
+explícito: para que el asistente se sienta realmente conversacional
+("que en verdad se sienta como una IA") y no un formulario disfrazado,
+la misma interacción — incluida la confirmación de una mutación —
+debe poder hacerse por voz, de punta a punta: el usuario habla, el
+sistema responde hablando y, si la acción requiere confirmación, la
+pregunta y vuelve a escuchar la respuesta sin que haya que tocar la
+pantalla.
+
+**Decisión:** se usa la Web Speech API del navegador, sin backend
+propio de voz. Dos piezas independientes (`frontend/src/lib/speech.ts`):
+
+- **Síntesis de voz** (`speechSynthesis`/`SpeechSynthesisUtterance`,
+  función `speak()`): corre 100% en el dispositivo, sin red. No es una
+  excepción a nada — mismo principio de procesamiento local del resto
+  del proyecto.
+- **Reconocimiento de voz** (`SpeechRecognition`/
+  `webkitSpeechRecognition`, función `listenOnce()`): en la mayoría de
+  navegadores (Chrome incluido) el audio capturado se envía al servidor
+  del fabricante del navegador para transcribirlo — no hay implementación
+  de reconocimiento verdaderamente local y estándar disponible hoy en
+  los navegadores objetivo del proyecto. Esto es una **excepción
+  documentada y acotada** al mismo principio de IA/procesamiento
+  privado de ADR-004, del mismo tipo que la de DeepSeek en ADR-010: se
+  acepta porque (a) el MVP en Render (ADR-015) ya está marcado
+  explícitamente como demo sin datos reales de ninguna pyme, y (b) usar
+  la voz es siempre **opcional** — el botón de micrófono solo aparece
+  si el navegador soporta `SpeechRecognition` (`isVoiceInputSupported()`),
+  y todo el flujo por texto/botones sigue funcionando exactamente igual
+  para quien no lo use. No reemplaza un motor de reconocimiento
+  autoalojado (p. ej. Whisper) para producción real con datos reales de
+  pymes — eso queda pendiente para cuando ese caso se materialice.
+
+El flujo de confirmación por voz (`ChatPage.tsx`, función
+`sendMessage`) es: al recibir una propuesta que requiere confirmación,
+el sistema primero **lee la pregunta en voz alta** (`speak()`) y luego
+**vuelve a escuchar** (`listenOnce()`) esperando un sí/no — nunca deja
+la iniciativa de "acordarse de confirmar" al usuario. La interpretación
+de esa respuesta como sí/no (`matchYesNo()`) es **puro matching local de
+palabras clave** (nunca se manda al LLM): la garantía de seguridad de
+que toda mutación pasa por una confirmación determinística
+(`docs/SECURITY.md` #5/#8) no puede depender del juicio de un modelo
+sobre si "eso sonó a un sí". Si no se reconoce con claridad un sí/no
+(silencio, ambigüedad, error de micrófono), la propuesta queda
+pendiente tal cual y se confirma/cancela a mano con los botones — no
+hay reintento automático de escucha, para no dejar al usuario atrapado
+en un loop.
+
+**Por qué no un backend de voz propio (p. ej. Whisper autoalojado) para
+este MVP:** el mismo argumento de costo/beneficio que en ADR-005 para
+OCR — instalar y mantener un modelo de reconocimiento de voz (típicamente
+con dependencias pesadas y/o GPU) es desproporcionado para validar,
+frente a un usuario real, si la interacción por voz completa el
+problema que se quiere resolver (dejar de sentirse como un formulario).
+Si la voz resulta central para el producto, este es el punto natural
+para revisar la excepción y reemplazar el reconocimiento por una
+implementación autoalojada.
+
+**Alternativas consideradas:**
+- *Solo síntesis de voz (leer resultados), sin reconocimiento:*
+  descartado — es exactamente lo que el usuario pidió evitar
+  explícitamente ("no quiero que sea... el sistema con voz igual le
+  pregunte si desea confirmar o cancelar").
+- *Grabar audio y mandarlo a un endpoint propio que llame a un STT
+  externo (p. ej. Whisper API):* descartado por ahora — agrega una
+  segunda excepción de proveedor externo (además de DeepSeek) por un
+  beneficio que la Web Speech API ya cubre gratis para validar el MVP.
+- *Interpretar la confirmación por voz con el LLM en vez de matching
+  local:* descartado — debilitaría la garantía de confirmación
+  determinística que es un requisito de seguridad del proyecto, no solo
+  una decisión de UX.
+
+**Consecuencias:** el reconocimiento de voz no funciona en navegadores
+sin `SpeechRecognition` (Firefox de escritorio, notablemente) — ahí el
+botón de micrófono simplemente no aparece (mejora progresiva, no hay
+mensaje de error molesto). La calidad del reconocimiento para español
+chileno depende del motor del navegador (`lang: 'es-CL'`), fuera del
+control del proyecto. Queda pendiente, si el negocio avanza más allá de
+MVP/demo, evaluar un motor de reconocimiento autoalojado antes de usar
+voz con datos reales de una pyme.

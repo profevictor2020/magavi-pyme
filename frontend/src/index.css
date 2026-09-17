@@ -320,6 +320,30 @@ a {
   color: var(--color-text);
 }
 
+.btn-mic {
+  min-width: 44px;
+  padding-left: var(--space-3);
+  padding-right: var(--space-3);
+  font-size: 1.1rem;
+}
+
+.btn-mic-active {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  animation: btn-mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes btn-mic-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 .pending-card,
 .result-card {
   margin-top: var(--space-2);

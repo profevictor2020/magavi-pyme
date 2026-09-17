@@ -1,0 +1,110 @@
+import { describe, expect, it } from 'vitest'
+import { describeResultForSpeech, matchYesNo } from './speech'
+
+describe('matchYesNo', () => {
+  it('reconoce afirmaciones con distintas palabras y mayúsculas/acentos', () => {
+    expect(matchYesNo('sí')).toBe('yes')
+    expect(matchYesNo('Confirmo')).toBe('yes')
+    expect(matchYesNo('dale')).toBe('yes')
+    expect(matchYesNo('ya po')).toBe('yes')
+  })
+
+  it('reconoce negaciones', () => {
+    expect(matchYesNo('no')).toBe('no')
+    expect(matchYesNo('cancela eso')).toBe('no')
+  })
+
+  it('devuelve null cuando no hay una palabra clara de sí/no', () => {
+    expect(matchYesNo('qué dijiste')).toBeNull()
+    expect(matchYesNo('')).toBeNull()
+  })
+})
+
+describe('describeResultForSpeech', () => {
+  it('describe una venta registrada', () => {
+    const text = describeResultForSpeech({
+      id: 1,
+      total: '7500.00',
+      status: 'confirmed',
+      sold_at: '2026-09-16T12:00:00Z',
+      items: [],
+    })
+    expect(text).toContain('Venta registrada')
+  })
+
+  it('describe una compra registrada', () => {
+    const text = describeResultForSpeech({
+      id: 1,
+      total: '7500.00',
+      status: 'confirmed',
+      purchased_at: '2026-09-16T12:00:00Z',
+      items: [],
+    })
+    expect(text).toContain('Compra registrada')
+  })
+
+  it('describe un movimiento de inventario con el nuevo stock', () => {
+    const text = describeResultForSpeech({
+      id: 1,
+      product: 5,
+      type: 'in',
+      quantity: '20',
+      balance_after: '80',
+      reason: 'Reposición',
+    })
+    expect(text).toBe('Movimiento registrado. Nuevo stock: 80.')
+  })
+
+  it('describe un resumen de periodo', () => {
+    const text = describeResultForSpeech({
+      today: { total: '10000', count: 3 },
+      week: { total: '50000', count: 12 },
+    })
+    expect(text).toContain('3 ventas')
+  })
+
+  it('describe un producto recién creado', () => {
+    const text = describeResultForSpeech({
+      id: 1,
+      name: 'Lápices de colores',
+      unit: 'unidad',
+      default_price: '1000',
+      current_stock: '60',
+    })
+    expect(text).toContain('Lápices de colores')
+    expect(text).toContain('60')
+  })
+
+  it('describe una lista de productos del catálogo', () => {
+    const text = describeResultForSpeech([
+      { id: 1, name: 'Café', unit: 'unidad', default_price: '2500', current_stock: '10' },
+      { id: 2, name: 'Té', unit: 'unidad', default_price: '2000', current_stock: '5' },
+    ])
+    expect(text).toContain('2 productos')
+    expect(text).toContain('Café')
+    expect(text).toContain('Té')
+  })
+
+  it('describe el catálogo vacío', () => {
+    expect(describeResultForSpeech([])).toBe('No hay productos en el catálogo.')
+  })
+
+  it('describe una consulta de stock de un solo producto en tono neutro', () => {
+    const text = describeResultForSpeech([
+      { id: 1, name: 'Lápices de colores', current_stock: '60', low_stock_threshold: '10' },
+    ])
+    expect(text).toBe('Lápices de colores: 60 en stock.')
+  })
+
+  it('describe una alerta de stock bajo con varios productos', () => {
+    const text = describeResultForSpeech([
+      { id: 1, name: 'Café', current_stock: '2', low_stock_threshold: '10' },
+      { id: 2, name: 'Té', current_stock: '1', low_stock_threshold: '5' },
+    ])
+    expect(text).toContain('2 productos con stock bajo')
+  })
+
+  it('devuelve cadena vacía para formas desconocidas', () => {
+    expect(describeResultForSpeech({ foo: 'bar' })).toBe('')
+  })
+})

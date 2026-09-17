@@ -4,6 +4,13 @@ import { assistantApi } from '../api/endpoints'
 import { extractErrorMessage } from '../api/client'
 import { useCompany } from '../context/CompanyContext'
 import { intentLabel, paramLabel } from '../lib/format'
+import {
+  describeResultForSpeech,
+  isVoiceInputSupported,
+  listenOnce,
+  matchYesNo,
+  speak,
+} from '../lib/speech'
 import { ResultView } from '../components/ResultView'
 
 type PendingStatus = 'pending' | 'confirmed' | 'cancelled'
@@ -107,6 +114,8 @@ export function ChatPage() {
   const [conversationId, setConversationId] = useState<number | null>(null)
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [voiceError, setVoiceError] = useState<string | null>(null)
   const inputId = useId()
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -131,13 +140,38 @@ export function ChatPage() {
     )
   }
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    const text = input.trim()
+  const handleConfirm = async (messageId: string, pendingActionId: number) => {
+    try {
+      const response = await assistantApi.confirmIntent(companyId, pendingActionId)
+      updatePendingAction(messageId, { status: 'confirmed', result: response.result })
+      return true
+    } catch (err) {
+      updatePendingAction(messageId, { error: extractErrorMessage(err) })
+      return false
+    }
+  }
+
+  const handleCancel = async (messageId: string, pendingActionId: number) => {
+    try {
+      await assistantApi.cancelIntent(companyId, pendingActionId)
+      updatePendingAction(messageId, { status: 'cancelled' })
+      return true
+    } catch (err) {
+      updatePendingAction(messageId, { error: extractErrorMessage(err) })
+      return false
+    }
+  }
+
+  // `viaVoice`: si el mensaje se originó por micrófono, además de mostrar
+  // la respuesta en pantalla (como siempre) se lee en voz alta — y si es
+  // una propuesta que muta datos, se pregunta y se vuelve a escuchar la
+  // confirmación, sin que el usuario tenga que tocar nada (ver
+  // docs/DECISIONS.md ADR-016). Si el usuario escribió con teclado, el
+  // comportamiento es exactamente el de antes: solo texto/botones.
+  const sendMessage = async (text: string, viaVoice: boolean) => {
     if (!text || isSending) return
 
     appendMessage({ id: nextId(), role: 'user', text })
-    setInput('')
     setIsSending(true)
 
     try {
@@ -146,6 +180,7 @@ export function ChatPage() {
 
       if (response.status === 'no_entendido' || response.status === 'error') {
         appendMessage({ id: nextId(), role: 'assistant', text: response.message })
+        if (viaVoice) void speak(response.message)
       } else if (response.status === 'executed') {
         appendMessage({
           id: nextId(),
@@ -153,11 +188,17 @@ export function ChatPage() {
           text: 'Listo, aquí está la información.',
           result: response.result,
         })
+        if (viaVoice) {
+          const spoken = describeResultForSpeech(response.result)
+          void speak(spoken || 'Listo, aquí está la información.')
+        }
       } else {
+        const messageId = nextId()
+        const questionText = `Tengo listo: ${intentLabel(response.intent)}. ¿Confirmas?`
         appendMessage({
-          id: nextId(),
+          id: messageId,
           role: 'assistant',
-          text: `Tengo listo: ${intentLabel(response.intent)}. ¿Confirmas?`,
+          text: questionText,
           pendingAction: {
             id: response.pending_action_id,
             intent: response.intent,
@@ -165,29 +206,55 @@ export function ChatPage() {
             status: 'pending',
           },
         })
+
+        if (viaVoice) {
+          await speak(questionText)
+          try {
+            const answer = await listenOnce()
+            const decision = matchYesNo(answer)
+            if (decision === 'yes') {
+              await handleConfirm(messageId, response.pending_action_id)
+            } else if (decision === 'no') {
+              await handleCancel(messageId, response.pending_action_id)
+            }
+            // Si no se reconoció un sí/no claro, la propuesta queda
+            // pendiente — se confirma/cancela a mano con los botones, sin
+            // reintentar solo para no dejar al usuario en un loop de
+            // escucha.
+          } catch {
+            // Sin micrófono disponible, permiso denegado o sin respuesta:
+            // igual queda la tarjeta con los botones para confirmar a mano.
+          }
+        }
       }
     } catch (err) {
-      appendMessage({ id: nextId(), role: 'assistant', text: extractErrorMessage(err) })
+      const message = extractErrorMessage(err)
+      appendMessage({ id: nextId(), role: 'assistant', text: message })
+      if (viaVoice) void speak(message)
     } finally {
       setIsSending(false)
     }
   }
 
-  const handleConfirm = async (messageId: string, pendingActionId: number) => {
-    try {
-      const response = await assistantApi.confirmIntent(companyId, pendingActionId)
-      updatePendingAction(messageId, { status: 'confirmed', result: response.result })
-    } catch (err) {
-      updatePendingAction(messageId, { error: extractErrorMessage(err) })
-    }
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault()
+    const text = input.trim()
+    if (!text || isSending) return
+    setInput('')
+    await sendMessage(text, false)
   }
 
-  const handleCancel = async (messageId: string, pendingActionId: number) => {
+  const handleMicClick = async () => {
+    if (isSending || isListening) return
+    setVoiceError(null)
+    setIsListening(true)
     try {
-      await assistantApi.cancelIntent(companyId, pendingActionId)
-      updatePendingAction(messageId, { status: 'cancelled' })
+      const transcript = await listenOnce()
+      await sendMessage(transcript, true)
     } catch (err) {
-      updatePendingAction(messageId, { error: extractErrorMessage(err) })
+      setVoiceError(err instanceof Error ? err.message : 'No se pudo usar el micrófono.')
+    } finally {
+      setIsListening(false)
     }
   }
 
@@ -214,7 +281,12 @@ export function ChatPage() {
           </div>
         ))}
         {isSending && <div className="chat-bubble chat-bubble-assistant chat-typing">Pensando…</div>}
+        {isListening && (
+          <div className="chat-bubble chat-bubble-assistant chat-typing">Escuchando…</div>
+        )}
       </div>
+
+      {voiceError && <p className="error-banner">{voiceError}</p>}
 
       <form className="chat-input-bar" onSubmit={handleSubmit}>
         <label htmlFor={inputId} className="sr-only">
@@ -228,6 +300,18 @@ export function ChatPage() {
           onChange={(e) => setInput(e.target.value)}
           disabled={isSending}
         />
+        {isVoiceInputSupported() && (
+          <button
+            className={`btn btn-secondary btn-mic${isListening ? ' btn-mic-active' : ''}`}
+            type="button"
+            onClick={handleMicClick}
+            disabled={isSending || isListening}
+            aria-label={isListening ? 'Escuchando' : 'Hablar'}
+            title={isListening ? 'Escuchando…' : 'Hablar'}
+          >
+            🎤
+          </button>
+        )}
         <button className="btn" type="submit" disabled={isSending || !input.trim()}>
           Enviar
         </button>
