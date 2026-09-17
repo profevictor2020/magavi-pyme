@@ -70,6 +70,15 @@ export interface ExpenseLike {
   reference_type: string
   category: string | null
   description: string
+  created_at?: string
+}
+
+export interface ExpenseListItemLike {
+  id: number
+  category: string
+  description: string
+  amount: string
+  created_at: string
 }
 
 export function isReceipt(value: unknown): value is ReceiptLike {
@@ -123,6 +132,13 @@ export function isTopSellingList(value: unknown): value is TopSellingProductLike
 }
 
 export function isExpense(value: unknown): value is ExpenseLike {
-  // "category" (registrar_gasto) es exclusivo de esta forma.
+  // "category" (registrar_gasto/actualizar_gasto) es exclusivo de esta
+  // forma frente a los demás objetos únicos (isProduct, etc.).
   return !!value && typeof value === 'object' && 'category' in value
+}
+
+export function isExpenseList(value: unknown): value is ExpenseListItemLike[] {
+  // "category" también distingue esta lista (consultar_gastos) de las
+  // demás formas en lista (isProductList/isLowStockList/isTopSellingList).
+  return Array.isArray(value) && (value.length === 0 || 'category' in value[0])
 }

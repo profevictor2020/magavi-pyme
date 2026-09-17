@@ -54,6 +54,8 @@ const INTENT_LABELS: Record<string, string> = {
   crear_producto: 'Crear producto',
   actualizar_producto: 'Actualizar producto',
   registrar_gasto: 'Registrar gasto',
+  actualizar_gasto: 'Corregir gasto',
+  consultar_gastos: 'Consultar gastos',
   consultar_ventas: 'Consultar ventas',
   consultar_ventas_producto: 'Consultar ventas de un producto',
   consultar_productos_mas_vendidos: 'Consultar productos más vendidos',
@@ -84,6 +86,7 @@ const PARAM_LABELS: Record<string, string> = {
   amount: 'Monto',
   category: 'Categoría',
   description: 'Descripción',
+  cash_movement_id: 'Gasto (ID)',
 }
 
 export function paramLabel(key: string): string {

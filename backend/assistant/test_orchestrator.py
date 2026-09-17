@@ -13,7 +13,7 @@ from .llm_providers import FakeLLMProvider
 from .models import Conversation, LearnedPhrase, Message, PendingAction
 from .orchestrator import (
     _construir_contexto_catalogo,
-    _construir_contexto_gastos_otros,
+    _construir_contexto_gastos_recientes,
     _construir_contexto_vocabulario,
     interpretar_y_proponer,
 )
@@ -197,6 +197,44 @@ class InterpretarYProponerTests(TestCase):
         self.assertEqual(resultado["status"], "pending_confirmation")
         self.assertEqual(resultado["intent"], "registrar_gasto")
         self.assertEqual(CashMovement.objects.for_company(self.company).count(), 0)
+
+    def test_mensaje_de_consultar_gastos_se_ejecuta_de_inmediato(self):
+        llm = FakeLLMProvider([_json("consultar_gastos")])
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="muéstrame los gastos que llevamos a la fecha",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"], [])
+
+    def test_mensaje_de_actualizar_gasto_crea_propuesta_pendiente(self):
+        gasto = CashMovement.objects.create(
+            company=self.company,
+            type=CashMovement.MovementType.EXPENSE,
+            amount=Decimal("150000"),
+            reference_type=CashMovement.ReferenceType.MANUAL,
+            category=CashMovement.Category.ARRIENDO,
+            created_by=self.user,
+        )
+        llm = FakeLLMProvider(
+            [_json("actualizar_gasto", {"cash_movement_id": gasto.id, "amount": "140000"})]
+        )
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="me equivoqué, el arriendo era 140000 no 150000",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "pending_confirmation")
+        self.assertEqual(resultado["intent"], "actualizar_gasto")
+        gasto.refresh_from_db()
+        self.assertEqual(gasto.amount, Decimal("150000.00"))
 
     def test_mensaje_de_ventas_de_un_producto_se_ejecuta_de_inmediato(self):
         llm = FakeLLMProvider([_json("consultar_ventas_producto", {"product_id": self.product.id})])
@@ -470,42 +508,68 @@ class VocabularioAprendidoTests(TestCase):
         self.assertTrue(any("cómo va el negocio" in content for content in system_messages))
 
 
-class ConstruirContextoGastosOtrosTests(TestCase):
-    """Ver docs/DECISIONS.md ADR-018: grounding para reconocer un gasto
-    "otro" recurrente y reutilizar la misma descripción."""
+class ConstruirContextoGastosRecientesTests(TestCase):
+    """Ver docs/DECISIONS.md ADR-018/ADR-019: grounding para reconocer
+    un gasto "otro" recurrente y para resolver a qué gasto se refiere el
+    usuario en actualizar_gasto (necesita el cash_movement_id)."""
 
     def setUp(self):
         self.company = CompanyFactory()
         self.user = UserFactory()
 
-    def test_vacio_sin_gastos_otros_registrados(self):
-        self.assertEqual(_construir_contexto_gastos_otros(self.company), "")
+    def test_vacio_sin_gastos_registrados(self):
+        self.assertEqual(_construir_contexto_gastos_recientes(self.company), "")
 
-    def test_incluye_descripciones_de_gastos_otro_de_la_empresa(self):
+    def test_incluye_id_categoria_y_descripcion(self):
+        movement = CashMovement.objects.create(
+            company=self.company,
+            type=CashMovement.MovementType.EXPENSE,
+            amount=Decimal("150000"),
+            reference_type=CashMovement.ReferenceType.MANUAL,
+            category=CashMovement.Category.ARRIENDO,
+            description="",
+            created_by=self.user,
+        )
+
+        contexto = _construir_contexto_gastos_recientes(self.company)
+
+        self.assertIn(f"cash_movement_id={movement.id}", contexto)
+        self.assertIn("arriendo", contexto)
+
+    def test_incluye_gastos_otro_con_su_descripcion(self):
         CashMovement.objects.create(
             company=self.company,
             type=CashMovement.MovementType.EXPENSE,
             amount=Decimal("5000"),
+            reference_type=CashMovement.ReferenceType.MANUAL,
             category=CashMovement.Category.OTRO,
             description="Multa municipal",
             created_by=self.user,
         )
 
-        contexto = _construir_contexto_gastos_otros(self.company)
+        contexto = _construir_contexto_gastos_recientes(self.company)
 
         self.assertIn("Multa municipal", contexto)
 
-    def test_no_incluye_gastos_de_categorias_fijas(self):
+    def test_no_incluye_movimientos_de_venta_o_compra(self):
         CashMovement.objects.create(
             company=self.company,
             type=CashMovement.MovementType.EXPENSE,
-            amount=Decimal("150000"),
-            category=CashMovement.Category.ARRIENDO,
-            description="no debería aparecer",
+            amount=Decimal("10000"),
+            reference_type=CashMovement.ReferenceType.PURCHASE,
+            description="Compra #1",
+            created_by=self.user,
+        )
+        CashMovement.objects.create(
+            company=self.company,
+            type=CashMovement.MovementType.INCOME,
+            amount=Decimal("2500"),
+            reference_type=CashMovement.ReferenceType.SALE,
+            description="Venta #1",
             created_by=self.user,
         )
 
-        self.assertEqual(_construir_contexto_gastos_otros(self.company), "")
+        self.assertEqual(_construir_contexto_gastos_recientes(self.company), "")
 
     def test_no_incluye_gastos_de_otra_empresa(self):
         other_company = CompanyFactory()
@@ -514,24 +578,10 @@ class ConstruirContextoGastosOtrosTests(TestCase):
             company=other_company,
             type=CashMovement.MovementType.EXPENSE,
             amount=Decimal("5000"),
+            reference_type=CashMovement.ReferenceType.MANUAL,
             category=CashMovement.Category.OTRO,
             description="gasto ajeno",
             created_by=other_user,
         )
 
-        self.assertEqual(_construir_contexto_gastos_otros(self.company), "")
-
-    def test_no_repite_descripciones_duplicadas(self):
-        for _ in range(3):
-            CashMovement.objects.create(
-                company=self.company,
-                type=CashMovement.MovementType.EXPENSE,
-                amount=Decimal("5000"),
-                category=CashMovement.Category.OTRO,
-                description="Multa municipal",
-                created_by=self.user,
-            )
-
-        contexto = _construir_contexto_gastos_otros(self.company)
-
-        self.assertEqual(contexto.count("Multa municipal"), 1)
+        self.assertEqual(_construir_contexto_gastos_recientes(self.company), "")

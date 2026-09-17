@@ -5,6 +5,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nuevos intents: consultar y corregir gastos (`consultar_gastos`, `actualizar_gasto`)
+
+`registrar_gasto` (ver más abajo) solo cubría la mitad del ciclo:
+"muéstrame los gastos que llevamos a la fecha" caía en `no_entendido`
+porque no existía forma de consultarlos, y tampoco había manera de
+corregir un gasto ingresado con un monto o categoría equivocada. Dos
+intents nuevos:
+
+- `consultar_gastos`: lista los egresos manuales de la empresa, más
+  recientes primero (nunca incluye compras de inventario ni ventas).
+- `actualizar_gasto`: corrige monto, categoría o descripción de un
+  gasto manual ya registrado — rechaza explícitamente corregir un
+  movimiento generado por una venta o compra (esos se corrigen
+  anulando/rehaciendo esa venta o compra, no acá).
+
+El contexto de grounding de gastos "otro" (ADR-018) se generalizó para
+incluir el `cash_movement_id` de todos los gastos manuales recientes,
+no solo los "otro" — así el modelo puede resolver a cuál gasto se
+refiere el usuario en `actualizar_gasto` ("el del arriendo", "el
+último que registré") sin que tenga que decir un ID que nunca ve. Ver
+ADR-019 (`docs/DECISIONS.md`).
+
 ### Nuevo intent: registrar egresos (arriendo, sueldos, servicios, otro)
 
 El único egreso que existía era la compra de mercadería a un proveedor

@@ -8,6 +8,7 @@
 import { expenseCategoryLabel, formatCLPSpoken, formatQuantity } from './format'
 import {
   isExpense,
+  isExpenseList,
   isLowStockList,
   isMovement,
   isPeriodSummary,
@@ -202,8 +203,16 @@ export function describeResultForSpeech(result: unknown): string {
   }
 
   if (isExpense(result)) {
+    // Misma forma para registrar_gasto y actualizar_gasto — frase
+    // neutra, no dice "registrado" (ver isProduct arriba).
     const categoria = expenseCategoryLabel(result.category).toLowerCase()
-    return `Gasto registrado: ${categoria}, ${formatCLPSpoken(result.amount)}.`
+    return `Gasto: ${categoria}, ${formatCLPSpoken(result.amount)}.`
+  }
+
+  if (isExpenseList(result)) {
+    if (result.length === 0) return 'No hay gastos registrados.'
+    const total = result.reduce((sum, e) => sum + Number(e.amount), 0)
+    return `Tienes ${result.length} gastos registrados, por ${formatCLPSpoken(total)} en total.`
   }
 
   return ''

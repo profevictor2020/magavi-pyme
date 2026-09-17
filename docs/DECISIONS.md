@@ -827,3 +827,69 @@ HTTP tradicional) — igual que con `LearnedPhrase`/ADR-017, el
 Tool Layer queda listo para que un futuro `CashboxViewSet` lo reutilice
 sin cambios si se agrega una pantalla de "Registrar gasto" más
 adelante.
+
+---
+
+## ADR-019 — `registrar_gasto` necesitaba su contraparte de lectura y
+corrección (`consultar_gastos`/`actualizar_gasto`)
+
+**Contexto:** al probar ADR-018 en vivo, "muéstrame los gastos que
+llevamos a la fecha" cayó en `no_entendido` — el propio modelo lo
+explicó bien: existía una acción para *registrar* un gasto, pero
+ninguna para *consultarlos*. La pregunta de seguimiento del usuario fue
+más general y queda como principio para el resto del proyecto:
+**"siempre debemos considerar todo esto cada vez que agregamos algo a
+la base de datos"** — o sea, no basta con la operación de escritura;
+antes de dar una funcionalidad por completa hay que preguntarse cómo se
+consulta lo que se guardó y cómo se corrige si alguien se equivocó al
+ingresarlo. `registrar_gasto` se había construido solo con la mitad de
+ese ciclo.
+
+**Decisión:** dos intents nuevos, mismo patrón de Tool Layer que el
+resto del proyecto:
+- `consultar_gastos` (solo lectura): lista los egresos manuales de la
+  empresa, más recientes primero — nunca incluye compras de inventario
+  ni ingresos de ventas, esos son otro concepto con su propio registro.
+- `actualizar_gasto` (mutante, con confirmación): corrige monto,
+  categoría o descripción de un gasto manual ya registrado. Rechaza
+  explícitamente corregir un `CashMovement` generado automáticamente
+  por una venta o compra (`reference_type` distinto de `MANUAL`) — esos
+  no se "corrigen" acá, se corrigen anulando/rehaciendo esa venta o
+  compra, que es su propio flujo con su propia integridad (stock,
+  totales, etc.).
+
+Para que `actualizar_gasto` pueda identificar A CUÁL gasto se refiere
+el usuario sin que este tenga que decir un ID que nunca ve en pantalla,
+se generalizó el contexto de grounding de ADR-018
+(`_construir_contexto_gastos_otros`, que solo mostraba descripciones de
+categoría "otro") a `_construir_contexto_gastos_recientes`: ahora
+incluye TODOS los gastos manuales recientes de la empresa con su
+`cash_movement_id`, no solo los "otro" — sirve para las dos cosas a la
+vez (reconocer un "otro" recurrente Y resolver a qué gasto corregir),
+con un solo contexto en el prompt en vez de dos parecidos.
+
+**Por qué revalidar en el Tool Layer que el movimiento sea manual (no
+solo confiar en que el LLM nunca proponga corregir una venta/compra):**
+mismo principio que el resto del proyecto — el LLM propone, pero el
+Tool Layer es la única fuente de verdad de si una operación es válida
+(ver `docs/ARCHITECTURE.md` #3.4). Un mensaje ambiguo o un intento
+malicioso ("corrige el monto de mi última venta a 1") no debe poder
+alterar plata de una venta real solo porque pasó por `actualizar_gasto`
+con el `cash_movement_id` de esa venta.
+
+**Alternativas consideradas:**
+- *Dejar `_construir_contexto_gastos_otros` como estaba y agregar un
+  contexto nuevo aparte solo para `actualizar_gasto`:* descartado —
+  hubiera mandado dos listas parecidas (una con solo "otro", otra con
+  todos) en el mismo prompt, gastando tokens para decir casi lo mismo
+  dos veces.
+- *Permitir corregir cualquier CashMovement, incluidos los de
+  venta/compra:* descartado, ver el párrafo de arriba — esos tienen su
+  propio ciclo de vida y corregirlos "a mano" rompería la integridad de
+  stock/totales que ya mantienen `crear_venta`/`registrar_compra`.
+
+**Consecuencias:** ninguna migración nueva (ambos intents reutilizan el
+`CashMovement`/`category` de ADR-018). El mismo principio de esta ADR
+— pensar consulta y corrección junto con cada escritura nueva — queda
+como lista de verificación implícita para cualquier entidad nueva que
+se agregue al asistente de acá en adelante, no solo para gastos.

@@ -8,10 +8,17 @@ from accounts.factories import UserFactory
 from audit.models import AuditLog
 from catalog.factories import ProductFactory
 from companies.factories import CompanyFactory
+from purchases.services import registrar_compra
 from sales.services import crear_venta
 
 from .models import CashMovement
-from .services import obtener_resumen, registrar_gasto
+from .services import (
+    actualizar_gasto,
+    consultar_gastos,
+    get_cash_movement_or_raise,
+    obtener_resumen,
+    registrar_gasto,
+)
 
 
 class ObtenerResumenTests(TestCase):
@@ -182,3 +189,152 @@ class RegistrarGastoTests(TestCase):
 
         entry = AuditLog.objects.get(entity_type="CashMovement", entity_id=str(movement.id))
         self.assertEqual(entry.source, AuditLog.Source.ASSISTANT)
+
+
+class ActualizarGastoTests(TestCase):
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+        self.gasto = registrar_gasto(
+            company=self.company, user=self.user, amount=Decimal("150000"), category="arriendo"
+        )
+
+    def test_updates_only_the_given_field(self):
+        movement = actualizar_gasto(
+            company=self.company, user=self.user, cash_movement=self.gasto, amount=Decimal("140000")
+        )
+
+        self.assertEqual(movement.amount, Decimal("140000.00"))
+        self.assertEqual(movement.category, "arriendo")
+
+    def test_updates_category_and_description_together(self):
+        movement = actualizar_gasto(
+            company=self.company,
+            user=self.user,
+            cash_movement=self.gasto,
+            category="servicios",
+            description="Cuenta de luz reclasificada",
+        )
+
+        self.assertEqual(movement.category, "servicios")
+        self.assertEqual(movement.description, "Cuenta de luz reclasificada")
+
+    def test_rejects_call_with_no_fields_to_update(self):
+        with self.assertRaises(ValidationError):
+            actualizar_gasto(company=self.company, user=self.user, cash_movement=self.gasto)
+
+    def test_rejects_zero_or_negative_amount(self):
+        with self.assertRaises(ValidationError):
+            actualizar_gasto(
+                company=self.company,
+                user=self.user,
+                cash_movement=self.gasto,
+                amount=Decimal("0"),
+            )
+
+    def test_changing_to_otro_without_description_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            actualizar_gasto(
+                company=self.company, user=self.user, cash_movement=self.gasto, category="otro"
+            )
+
+    def test_changing_to_otro_with_description_is_allowed(self):
+        movement = actualizar_gasto(
+            company=self.company,
+            user=self.user,
+            cash_movement=self.gasto,
+            category="otro",
+            description="Multa municipal",
+        )
+
+        self.assertEqual(movement.category, "otro")
+
+    def test_rejects_correcting_a_purchase_generated_movement(self):
+        product = ProductFactory(company=self.company, current_stock=Decimal("10"))
+        registrar_compra(
+            company=self.company,
+            user=self.user,
+            items=[{"product": product, "quantity": Decimal("5")}],
+        )
+        purchase_movement = (
+            CashMovement.objects.for_company(self.company)
+            .filter(reference_type=CashMovement.ReferenceType.PURCHASE)
+            .get()
+        )
+
+        with self.assertRaises(ValidationError):
+            actualizar_gasto(
+                company=self.company,
+                user=self.user,
+                cash_movement=purchase_movement,
+                amount=Decimal("1"),
+            )
+
+    def test_writes_audit_log_with_before_and_after(self):
+        actualizar_gasto(
+            company=self.company, user=self.user, cash_movement=self.gasto, amount=Decimal("140000")
+        )
+
+        entry = AuditLog.objects.get(
+            entity_type="CashMovement", entity_id=str(self.gasto.id), action="cashmovement.update"
+        )
+        self.assertEqual(Decimal(entry.before["amount"]), Decimal("150000"))
+        self.assertEqual(Decimal(entry.after["amount"]), Decimal("140000"))
+
+
+class GetCashMovementOrRaiseTests(TestCase):
+    def test_rejects_movement_from_another_company(self):
+        company = CompanyFactory()
+        other_company = CompanyFactory()
+        user = UserFactory()
+        gasto = registrar_gasto(
+            company=other_company,
+            user=user,
+            amount=Decimal("1000"),
+            category="otro",
+            description="x",
+        )
+
+        with self.assertRaises(ValidationError):
+            get_cash_movement_or_raise(company=company, cash_movement_id=gasto.id)
+
+
+class ConsultarGastosTests(TestCase):
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+
+    def test_empty_when_nothing_registered(self):
+        self.assertEqual(consultar_gastos(company=self.company), [])
+
+    def test_lists_manual_expenses_most_recent_first(self):
+        primero = registrar_gasto(
+            company=self.company, user=self.user, amount=Decimal("150000"), category="arriendo"
+        )
+        segundo = registrar_gasto(
+            company=self.company, user=self.user, amount=Decimal("30000"), category="sueldos"
+        )
+
+        resultado = consultar_gastos(company=self.company)
+
+        self.assertEqual(resultado[0]["id"], segundo.id)
+        self.assertEqual(resultado[1]["id"], primero.id)
+
+    def test_excludes_sales_and_purchases(self):
+        product = ProductFactory(company=self.company, current_stock=Decimal("10"))
+        crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": product, "quantity": Decimal("1")}],
+        )
+
+        self.assertEqual(consultar_gastos(company=self.company), [])
+
+    def test_excludes_other_companies_expenses(self):
+        other_company = CompanyFactory()
+        other_user = UserFactory()
+        registrar_gasto(
+            company=other_company, user=other_user, amount=Decimal("1000"), category="sueldos"
+        )
+
+        self.assertEqual(consultar_gastos(company=self.company), [])

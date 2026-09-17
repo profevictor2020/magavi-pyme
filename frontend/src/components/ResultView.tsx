@@ -1,6 +1,7 @@
-import { expenseCategoryLabel, formatCLP, formatQuantity } from '../lib/format'
+import { expenseCategoryLabel, formatCLP, formatDateTime, formatQuantity } from '../lib/format'
 import {
   isExpense,
+  isExpenseList,
   isLowStockList,
   isMovement,
   isPeriodSummary,
@@ -154,6 +155,23 @@ export function ResultView({ result }: { result: unknown }) {
           </div>
         )}
       </div>
+    )
+  }
+
+  if (isExpenseList(result)) {
+    if (result.length === 0) return <div className="result-card">Sin gastos registrados.</div>
+    return (
+      <ul className="result-items result-card">
+        {result.map((expense) => (
+          <li key={expense.id}>
+            {expenseCategoryLabel(expense.category)}
+            {expense.description && ` — ${expense.description}`}: {formatCLP(expense.amount)}{' '}
+            <span style={{ color: 'var(--color-muted)' }}>
+              ({formatDateTime(expense.created_at)})
+            </span>
+          </li>
+        ))}
+      </ul>
     )
   }
 

@@ -12,7 +12,12 @@ objetos concretos y delega.
 from dataclasses import dataclass
 from typing import Callable
 
-from cashbox.services import registrar_gasto
+from cashbox.services import (
+    actualizar_gasto,
+    consultar_gastos,
+    get_cash_movement_or_raise,
+    registrar_gasto,
+)
 from catalog.services import (
     actualizar_producto,
     consultar_stock_bajo,
@@ -32,6 +37,7 @@ from sales.services import (
 )
 
 from .serializers import (
+    ActualizarGastoIntentSerializer,
     ActualizarProductoIntentSerializer,
     AjustarInventarioIntentSerializer,
     ConsultarProductoIntentSerializer,
@@ -125,6 +131,25 @@ def _ejecutar_registrar_gasto(*, company, user, params):
     )
 
 
+def _ejecutar_actualizar_gasto(*, company, user, params):
+    movement = get_cash_movement_or_raise(
+        company=company, cash_movement_id=params["cash_movement_id"]
+    )
+    return actualizar_gasto(
+        company=company,
+        user=user,
+        cash_movement=movement,
+        amount=params.get("amount"),
+        category=params.get("category"),
+        description=params.get("description"),
+        origen="assistant",
+    )
+
+
+def _ejecutar_consultar_gastos(*, company, user, params):
+    return consultar_gastos(company=company)
+
+
 def _ejecutar_consultar_ventas(*, company, user, params):
     return consultar_ventas(company=company)
 
@@ -189,6 +214,10 @@ INTENTS: dict[str, IntentDefinition] = {
     "registrar_gasto": IntentDefinition(
         RegistrarGastoIntentSerializer, True, _ejecutar_registrar_gasto
     ),
+    "actualizar_gasto": IntentDefinition(
+        ActualizarGastoIntentSerializer, True, _ejecutar_actualizar_gasto
+    ),
+    "consultar_gastos": IntentDefinition(EmptyParamsSerializer, False, _ejecutar_consultar_gastos),
     "consultar_ventas": IntentDefinition(EmptyParamsSerializer, False, _ejecutar_consultar_ventas),
     "consultar_ventas_producto": IntentDefinition(
         ConsultarVentasProductoIntentSerializer, False, _ejecutar_consultar_ventas_producto

@@ -78,10 +78,25 @@ trabajadores; "servicios" para cuentas de luz, agua, gas, internet, \
 teléfono; y "otro" para cualquier gasto que no encaje en esas tres — en \
 ese caso SIEMPRE incluye una "description" breve y clara de qué es, \
 nunca la dejes vacía. Si el gasto se parece a uno de los gastos "otro" \
-que esta empresa ya registró antes (ver el contexto de vocabulario más \
-abajo, si viene), usa la MISMA descripción que usó antes en vez de \
+que esta empresa ya registró antes (ver el contexto de gastos recientes \
+más abajo, si viene), usa la MISMA descripción que usó antes en vez de \
 inventar una redacción nueva — así sabes que es el mismo tipo de gasto \
 recurrente.
+- actualizar_gasto: {"cash_movement_id": <int>, "amount": \
+"<opcional>", "category": "<opcional>", "description": "<opcional>"}. \
+Para corregir un gasto QUE YA SE REGISTRÓ y se ingresó mal (monto, \
+categoría o descripción equivocada) — ej. "me equivoqué, el arriendo \
+era 140000 no 150000", "ese gasto en realidad era de sueldos, no \
+servicios". Usa el cash_movement_id del contexto de gastos recientes \
+(más abajo, si viene) para identificar a cuál se refiere el usuario — \
+nunca inventes uno; si no encuentras un gasto que calce con lo que \
+describe el usuario, responde no_entendido en vez de adivinar. Incluye \
+SOLO los campos que cambian.
+- consultar_gastos: {} (lista los egresos manuales registrados — \
+arriendo/sueldos/servicios/otro — más recientes primero. NUNCA incluye \
+compras de inventario a proveedores, eso es otro concepto — ej. \
+"muéstrame los gastos que llevamos", "¿qué gastos hemos tenido?", \
+"lista los egresos", "los gastos a la fecha")
 - consultar_ventas: {} (total vendido HOY y esta semana, sumando TODOS \
 los productos — ej. "¿cuánto vendí hoy?", "¿cómo van las ventas de la \
 semana?". También úsalo para preguntas generales y coloquiales sobre \
@@ -173,39 +188,35 @@ def _construir_contexto_vocabulario(company) -> str:
     )
 
 
-def _construir_contexto_gastos_otros(company) -> str:
-    """Descripciones de gastos categoría "otro" que esta empresa ya
-    registró antes (ver docs/DECISIONS.md ADR-018) — mismo mecanismo de
-    grounding que el vocabulario de intents (LearnedPhrase), pero para
-    reconocer un gasto recurrente que no encaja en las categorías fijas
-    (arriendo/sueldos/servicios) y reutilizar la misma descripción en
-    vez de redactarla distinto cada vez.
-
-    Se deduplica en Python (no con `.distinct()` de la base de datos):
-    Postgres exige que las columnas del ORDER BY estén en el SELECT
-    cuando se usa DISTINCT, y aquí se ordena por fecha pero solo se
-    necesita la descripción.
+def _construir_contexto_gastos_recientes(company) -> str:
+    """Egresos manuales recientes de esta empresa (id, categoría,
+    descripción, monto — ver docs/DECISIONS.md ADR-018/ADR-019). Sirve
+    para dos cosas: (1) reconocer un gasto "otro" recurrente y reutilizar
+    la misma descripción en vez de redactarla distinto cada vez, y (2)
+    resolver a qué gasto se refiere el usuario en actualizar_gasto (ej.
+    "el del arriendo", "el último gasto que registré") sin que tenga que
+    decir un cash_movement_id que nunca ve.
     """
-    recientes = (
+    movimientos = list(
         CashMovement.objects.for_company(company)
-        .filter(type=CashMovement.MovementType.EXPENSE, category=CashMovement.Category.OTRO)
-        .exclude(description="")
-        .order_by("-created_at")
-        .values_list("description", flat=True)[:100]
+        .filter(
+            type=CashMovement.MovementType.EXPENSE,
+            reference_type=CashMovement.ReferenceType.MANUAL,
+        )
+        .order_by("-created_at")[:30]
     )
-    vistas: list[str] = []
-    for descripcion in recientes:
-        if descripcion not in vistas:
-            vistas.append(descripcion)
-        if len(vistas) >= 20:
-            break
-    if not vistas:
+    if not movimientos:
         return ""
-    lineas = "\n".join(f'- "{d}"' for d in vistas)
+    lineas = [
+        f"- cash_movement_id={m.id}: {m.category} — "
+        f"{m.description or 'sin descripción'} (${m.amount})"
+        for m in movimientos
+    ]
     return (
-        'Gastos de categoría "otro" que esta empresa ya registró antes (si el '
-        "usuario menciona algo parecido, es el mismo gasto recurrente — usa "
-        "exactamente esta misma descripción, no la redactes de nuevo):\n" + lineas
+        "Gastos manuales recientes de esta empresa (más reciente primero; "
+        "úsalo para saber a cuál se refiere el usuario en actualizar_gasto, "
+        'o para reconocer un gasto "otro" recurrente y reutilizar su '
+        "descripción en registrar_gasto):\n" + "\n".join(lineas)
     )
 
 
@@ -322,9 +333,9 @@ def interpretar_y_proponer(*, company, user, mensaje, conversation=None, llm_pro
     vocabulario = _construir_contexto_vocabulario(company)
     if vocabulario:
         messages.append({"role": "system", "content": vocabulario})
-    gastos_otros = _construir_contexto_gastos_otros(company)
-    if gastos_otros:
-        messages.append({"role": "system", "content": gastos_otros})
+    gastos_recientes = _construir_contexto_gastos_recientes(company)
+    if gastos_recientes:
+        messages.append({"role": "system", "content": gastos_recientes})
     messages.append({"role": "user", "content": mensaje})
 
     intent_dict, _raw = _pedir_intent_al_llm(llm_provider, messages)

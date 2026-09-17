@@ -64,6 +64,65 @@ class ProponerIntentTests(TestCase):
                 raw_parameters={"amount": "5000", "category": "otro"},
             )
 
+    def test_consultar_gastos_executes_immediately(self):
+        resultado = proponer_intent(
+            company=self.company, user=self.user, intent_name="consultar_gastos", raw_parameters={}
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"], [])
+
+    def test_actualizar_gasto_creates_pending_action_without_executing(self):
+        gasto = CashMovement.objects.create(
+            company=self.company,
+            type=CashMovement.MovementType.EXPENSE,
+            amount=Decimal("150000"),
+            reference_type=CashMovement.ReferenceType.MANUAL,
+            category=CashMovement.Category.ARRIENDO,
+            created_by=self.user,
+        )
+
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="actualizar_gasto",
+            raw_parameters={"cash_movement_id": gasto.id, "amount": "140000"},
+        )
+
+        self.assertEqual(resultado["status"], "pending_confirmation")
+        gasto.refresh_from_db()
+        self.assertEqual(gasto.amount, Decimal("150000.00"))
+
+    def test_actualizar_gasto_propuesta_de_otra_empresa_se_crea_pero_no_se_puede_confirmar(self):
+        # Mismo patrón que ajustar_inventario/crear_venta con un
+        # producto ajeno (ver SeguridadIntentTests más abajo): la
+        # propuesta es válida en forma, pero confirmarla revalida contra
+        # el Tool Layer y ahí sí se rechaza (docs/ARCHITECTURE.md #3.4).
+        other_company = CompanyFactory()
+        gasto_ajeno = CashMovement.objects.create(
+            company=other_company,
+            type=CashMovement.MovementType.EXPENSE,
+            amount=Decimal("1000"),
+            reference_type=CashMovement.ReferenceType.MANUAL,
+            category=CashMovement.Category.SUELDOS,
+            created_by=self.user,
+        )
+
+        propuesta = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="actualizar_gasto",
+            raw_parameters={"cash_movement_id": gasto_ajeno.id, "amount": "1"},
+        )
+
+        self.assertEqual(propuesta["status"], "pending_confirmation")
+        with self.assertRaises(ValidationError):
+            confirmar_intent(
+                company=self.company,
+                user=self.user,
+                pending_action_id=propuesta["pending_action_id"],
+            )
+
     def test_readonly_intent_executes_immediately(self):
         resultado = proponer_intent(
             company=self.company,
@@ -256,6 +315,28 @@ class ConfirmarIntentTests(TestCase):
 
         self.assertEqual(movement.amount, Decimal("150000.00"))
         self.assertEqual(movement.category, "arriendo")
+
+    def test_confirm_actualizar_gasto_corrects_the_amount(self):
+        gasto = CashMovement.objects.create(
+            company=self.company,
+            type=CashMovement.MovementType.EXPENSE,
+            amount=Decimal("150000"),
+            reference_type=CashMovement.ReferenceType.MANUAL,
+            category=CashMovement.Category.ARRIENDO,
+            created_by=self.user,
+        )
+        propuesta = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="actualizar_gasto",
+            raw_parameters={"cash_movement_id": gasto.id, "amount": "140000"},
+        )
+
+        movement = confirmar_intent(
+            company=self.company, user=self.user, pending_action_id=propuesta["pending_action_id"]
+        )
+
+        self.assertEqual(movement.amount, Decimal("140000.00"))
 
     def test_double_confirm_is_rejected_and_does_not_duplicate(self):
         propuesta = self._proponer_venta()

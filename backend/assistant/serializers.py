@@ -71,6 +71,21 @@ class RegistrarGastoIntentSerializer(serializers.Serializer):
         return attrs
 
 
+class ActualizarGastoIntentSerializer(serializers.Serializer):
+    cash_movement_id = serializers.IntegerField()
+    amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, required=False, min_value=Decimal("0.01")
+    )
+    category = serializers.ChoiceField(choices=CashMovement.Category.choices, required=False)
+    description = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        campos_editables = ("amount", "category", "description")
+        if not any(field in attrs for field in campos_editables):
+            raise serializers.ValidationError("Debes indicar al menos un campo para actualizar.")
+        return attrs
+
+
 class IntentEnvelopeSerializer(serializers.Serializer):
     """Forma del cuerpo de POST /api/assistant/intents/. `intent` no se
     restringe aquí a una lista cerrada de choices para evitar un import

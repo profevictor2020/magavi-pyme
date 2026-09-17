@@ -171,7 +171,7 @@ describe('describeResultForSpeech', () => {
     expect(describeResultForSpeech([])).toBe('No hay productos en el catálogo.')
   })
 
-  it('describe un gasto registrado con su categoría', () => {
+  it('describe un gasto (misma forma para registrar_gasto y actualizar_gasto, frase neutra)', () => {
     const text = describeResultForSpeech({
       id: 1,
       type: 'expense',
@@ -180,7 +180,15 @@ describe('describeResultForSpeech', () => {
       category: 'arriendo',
       description: '',
     })
-    expect(text).toBe('Gasto registrado: arriendo, 150000 pesos.')
+    expect(text).toBe('Gasto: arriendo, 150000 pesos.')
+  })
+
+  it('describe la lista de gastos registrados con el total', () => {
+    const text = describeResultForSpeech([
+      { id: 1, category: 'arriendo', description: '', amount: '150000.00', created_at: '2026-09-17' },
+      { id: 2, category: 'sueldos', description: '', amount: '30000.00', created_at: '2026-09-17' },
+    ])
+    expect(text).toBe('Tienes 2 gastos registrados, por 180000 pesos en total.')
   })
 
   it('devuelve cadena vacía para formas desconocidas', () => {
