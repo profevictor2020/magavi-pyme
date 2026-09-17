@@ -9,6 +9,17 @@ export function formatCLP(amount: string | number | null | undefined): string {
   }).format(value)
 }
 
+/** El backend guarda cantidades/stock como decimal con 3 dígitos
+ * (soporta kg/lt fraccionarios), pero mostrar "10.000" para algo en
+ * unidades es confuso. Recorta los ceros que sobran sin perder un
+ * decimal real (2.500 -> "2.5", 10.000 -> "10"). */
+export function formatQuantity(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '—'
+  const num = typeof value === 'string' ? Number(value) : value
+  if (Number.isNaN(num)) return String(value)
+  return num.toString()
+}
+
 export function formatDateTime(iso: string): string {
   try {
     return new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short' }).format(

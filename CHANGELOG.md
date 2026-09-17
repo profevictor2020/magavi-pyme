@@ -5,6 +5,18 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Formato de cantidades/stock en el frontend
+
+El backend guarda cantidades y stock como decimal con 3 dígitos (para
+soportar kg/lt fraccionarios), pero eso hacía que se viera "10.000" en
+vez de "10" para productos en unidades. Nuevo helper `formatQuantity`
+(`lib/format.ts`) recorta los ceros que sobran sin perder un decimal
+real (2.500 → "2.5"), aplicado en `ResultView`, `ProductsPage` y
+`CashboxPage`. De paso se corrigió un bug real encontrado al tocar esta
+línea: el movimiento de inventario mostraba el signo duplicado en
+salidas de stock (el "-" del prefijo más el signo que ya traía el
+número, ej. "--3.000") — ahora usa el valor absoluto.
+
 ### Nuevo intent de solo lectura: consultar stock de un producto puntual
 
 Faltaba un intent para "¿cuánto stock tengo de X?" — solo existía

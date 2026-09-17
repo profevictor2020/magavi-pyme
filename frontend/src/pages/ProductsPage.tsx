@@ -6,7 +6,7 @@ import { useCompany } from '../context/CompanyContext'
 import type { Product } from '../api/types'
 import { ErrorBanner } from '../components/ErrorBanner'
 import { FullScreenSpinner } from '../components/Spinner'
-import { formatCLP } from '../lib/format'
+import { formatCLP, formatQuantity } from '../lib/format'
 
 function AdjustStockForm({
   product,
@@ -196,7 +196,8 @@ export function ProductsPage() {
         <div key={product.id} className="card">
           <strong>{product.name}</strong>
           <div style={{ color: 'var(--color-muted)', fontSize: '0.85rem' }}>
-            Stock: {product.current_stock} {product.unit} · Venta: {formatCLP(product.default_price)}
+            Stock: {formatQuantity(product.current_stock)} {product.unit} · Venta:{' '}
+            {formatCLP(product.default_price)}
           </div>
           <button
             className="btn btn-secondary"

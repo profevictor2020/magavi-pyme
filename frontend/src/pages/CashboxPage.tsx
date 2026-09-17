@@ -5,7 +5,7 @@ import { useCompany } from '../context/CompanyContext'
 import type { CashboxSummary } from '../api/types'
 import { ErrorBanner } from '../components/ErrorBanner'
 import { FullScreenSpinner } from '../components/Spinner'
-import { formatCLP } from '../lib/format'
+import { formatCLP, formatQuantity } from '../lib/format'
 
 export function CashboxPage() {
   const { activeCompany } = useCompany()
@@ -65,7 +65,8 @@ export function CashboxPage() {
           <ul className="result-items">
             {summary.low_stock_products.map((product) => (
               <li key={product.id}>
-                {product.name}: {product.current_stock} (mínimo {product.low_stock_threshold})
+                {product.name}: {formatQuantity(product.current_stock)} (mínimo{' '}
+                {formatQuantity(product.low_stock_threshold)})
               </li>
             ))}
           </ul>

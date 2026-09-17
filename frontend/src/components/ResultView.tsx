@@ -1,4 +1,4 @@
-import { formatCLP } from '../lib/format'
+import { formatCLP, formatQuantity } from '../lib/format'
 
 interface ReceiptLike {
   id: number
@@ -83,7 +83,7 @@ export function ResultView({ result }: { result: unknown }) {
         <ul className="result-items">
           {result.items.map((item) => (
             <li key={item.id}>
-              Producto #{item.product} · {item.quantity} ×{' '}
+              Producto #{item.product} · {formatQuantity(item.quantity)} ×{' '}
               {formatCLP(item.unit_price ?? item.unit_cost)} = {formatCLP(item.subtotal)}
             </li>
           ))}
@@ -98,10 +98,10 @@ export function ResultView({ result }: { result: unknown }) {
         <strong>Movimiento de inventario</strong>
         <div>
           Producto #{result.product}: {result.type === 'in' ? '+' : '-'}
-          {result.quantity} ({result.reason})
+          {formatQuantity(Math.abs(Number(result.quantity)))} ({result.reason})
         </div>
         <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
-          Nuevo stock: {result.balance_after}
+          Nuevo stock: {formatQuantity(result.balance_after)}
         </div>
       </div>
     )
@@ -127,7 +127,7 @@ export function ResultView({ result }: { result: unknown }) {
           Producto creado: {result.name} ({formatCLP(result.default_price)})
         </strong>
         <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
-          Stock: {result.current_stock} {result.unit}
+          Stock: {formatQuantity(result.current_stock)} {result.unit}
         </div>
       </div>
     )
@@ -139,7 +139,8 @@ export function ResultView({ result }: { result: unknown }) {
       <ul className="result-items result-card">
         {result.map((product) => (
           <li key={product.id}>
-            {product.name}: {product.current_stock} (mínimo {product.low_stock_threshold})
+            {product.name}: {formatQuantity(product.current_stock)} (mínimo{' '}
+            {formatQuantity(product.low_stock_threshold)})
           </li>
         ))}
       </ul>
