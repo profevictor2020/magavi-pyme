@@ -56,6 +56,9 @@ le exijas al usuario decir literalmente la palabra "motivo".
 - consultar_stock_bajo: {}
 - consultar_stock_producto: {"product_id": <int>} (para preguntas sobre \
 el stock de UN producto puntual, ej. "¿cuánto stock tengo de...?")
+- consultar_catalogo: {} (para "¿qué productos tenemos?", "lista el \
+catálogo", o cualquier pregunta sobre el catálogo completo, no de un \
+producto puntual)
 
 Si no puedes determinar con certeza qué acción corresponde (falta \
 información, el mensaje es ambiguo, o no corresponde a ninguna de estas \

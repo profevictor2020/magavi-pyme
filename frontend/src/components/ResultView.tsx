@@ -58,11 +58,17 @@ function isPeriodSummary(value: unknown): value is PeriodSummaryLike {
 }
 
 function isLowStockList(value: unknown): value is LowStockLike[] {
-  return Array.isArray(value) && (value.length === 0 || 'current_stock' in value[0])
+  // "low_stock_threshold" (no solo "current_stock") es lo que distingue
+  // esta forma de isProductList — ambas son arrays de objetos con stock.
+  return Array.isArray(value) && (value.length === 0 || 'low_stock_threshold' in value[0])
 }
 
 function isProduct(value: unknown): value is ProductLike {
   return !!value && typeof value === 'object' && 'default_price' in value && 'unit' in value
+}
+
+function isProductList(value: unknown): value is ProductLike[] {
+  return Array.isArray(value) && (value.length === 0 || 'default_price' in value[0])
 }
 
 /** Renderiza el resultado de un intent ejecutado/confirmado. Cubre las
@@ -130,6 +136,20 @@ export function ResultView({ result }: { result: unknown }) {
           Stock: {formatQuantity(result.current_stock)} {result.unit}
         </div>
       </div>
+    )
+  }
+
+  if (isProductList(result)) {
+    if (result.length === 0) return <div className="result-card">Sin productos en el catálogo.</div>
+    return (
+      <ul className="result-items result-card">
+        {result.map((product) => (
+          <li key={product.id}>
+            {product.name}: {formatQuantity(product.current_stock)} {product.unit} —{' '}
+            {formatCLP(product.default_price)}
+          </li>
+        ))}
+      </ul>
     )
   }
 

@@ -85,6 +85,21 @@ class ProponerIntentTests(TestCase):
                 raw_parameters={"product_id": foreign_product.id},
             )
 
+    def test_consultar_catalogo_lista_solo_productos_de_la_empresa(self):
+        other_company = CompanyFactory()
+        ProductFactory(company=other_company, name="Ajeno")
+
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="consultar_catalogo",
+            raw_parameters={},
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        nombres = [item["name"] for item in resultado["result"]]
+        self.assertEqual(nombres, [self.product.name])
+
     def test_unknown_intent_is_rejected(self):
         with self.assertRaises(ValidationError):
             proponer_intent(

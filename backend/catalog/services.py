@@ -94,6 +94,25 @@ def consultar_stock_bajo(*, company):
     ]
 
 
+def listar_productos(*, company):
+    """Tool Layer de solo lectura: catálogo completo (productos activos),
+    para "¿qué productos tenemos?"/"lista el catálogo". Usado por el
+    asistente conversacional — la pantalla de Productos tiene su propio
+    endpoint HTTP paginado, este es solo para la respuesta de chat.
+    """
+    products = Product.objects.for_company(company).filter(is_active=True).order_by("name")
+    return [
+        {
+            "id": product.id,
+            "name": product.name,
+            "unit": product.unit,
+            "current_stock": str(product.current_stock),
+            "default_price": str(product.default_price),
+        }
+        for product in products
+    ]
+
+
 def get_product_or_raise(*, company, product_id):
     """Resuelve un product_id a una instancia Product con scope de
     empresa, para consumidores no-HTTP (el Tool Layer del asistente).

@@ -5,6 +5,17 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nuevo intent de solo lectura: consultar el catálogo completo
+
+Faltaba responder "¿qué productos tenemos?" — solo existían intents
+para stock de un producto puntual o stock bajo, ninguno para listar
+todo el catálogo. `consultar_catalogo` (`catalog/services.py::listar_productos`)
+devuelve nombre, unidad, precio y stock de cada producto activo de la
+empresa. Frontend: nuevo caso `isProductList` en `ResultView` — de
+paso se ajustó `isLowStockList` para distinguirse por
+`low_stock_threshold` (no solo por `current_stock`, que ambas formas
+comparten) y no confundir una lista con la otra.
+
 ### Formato de cantidades/stock en el frontend
 
 El backend guarda cantidades y stock como decimal con 3 dígitos (para

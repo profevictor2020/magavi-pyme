@@ -12,7 +12,12 @@ objetos concretos y delega.
 from dataclasses import dataclass
 from typing import Callable
 
-from catalog.services import consultar_stock_bajo, crear_producto, get_product_or_raise
+from catalog.services import (
+    consultar_stock_bajo,
+    crear_producto,
+    get_product_or_raise,
+    listar_productos,
+)
 from inventory.services import ajustar_inventario
 from purchases.serializers import PurchaseCreateSerializer
 from purchases.services import registrar_compra
@@ -93,6 +98,10 @@ def _ejecutar_consultar_stock_bajo(*, company, user, params):
     return consultar_stock_bajo(company=company)
 
 
+def _ejecutar_consultar_catalogo(*, company, user, params):
+    return listar_productos(company=company)
+
+
 def _ejecutar_consultar_stock_producto(*, company, user, params):
     # Misma forma que un elemento de consultar_stock_bajo (envuelto en una
     # lista de un solo ítem): reutiliza el mismo render en el frontend
@@ -132,6 +141,9 @@ INTENTS: dict[str, IntentDefinition] = {
     ),
     "consultar_stock_producto": IntentDefinition(
         ConsultarStockProductoIntentSerializer, False, _ejecutar_consultar_stock_producto
+    ),
+    "consultar_catalogo": IntentDefinition(
+        EmptyParamsSerializer, False, _ejecutar_consultar_catalogo
     ),
 }
 
