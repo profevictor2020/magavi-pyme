@@ -180,7 +180,7 @@ def productos_mas_vendidos(*, company, limit=5):
     """
     aggregates = (
         SaleItem.objects.filter(sale__company=company, sale__status=Sale.Status.CONFIRMED)
-        .values("product_id", "product__name")
+        .values("product_id", "product__name", "product__unit")
         .annotate(quantity=Sum("quantity"), total=Sum("subtotal"))
         .order_by("-quantity")[:limit]
     )
@@ -188,6 +188,7 @@ def productos_mas_vendidos(*, company, limit=5):
         {
             "product_id": row["product_id"],
             "product_name": row["product__name"],
+            "unit": row["product__unit"],
             "quantity": str(row["quantity"]),
             "total": str(row["total"]),
         }

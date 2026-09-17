@@ -8,6 +8,7 @@ from django.utils import timezone
 from accounts.factories import UserFactory
 from cashbox.models import CashMovement
 from catalog.factories import ProductFactory
+from catalog.models import Product
 from companies.factories import CompanyFactory
 from inventory.models import InventoryMovement
 
@@ -206,6 +207,24 @@ class ProductosMasVendidosTests(TestCase):
 
     def test_empty_when_nothing_sold(self):
         self.assertEqual(productos_mas_vendidos(company=self.company), [])
+
+    def test_incluye_la_unidad_de_medida_del_producto(self):
+        # La necesita el asistente para formatear la cantidad al armar
+        # el contexto de ventas del intent "asesoria" (ver
+        # docs/DECISIONS.md ADR-023/ADR-024): "unidad" siempre entero,
+        # kg/lt preservan decimales reales.
+        harina = ProductFactory(
+            company=self.company, name="Harina", unit=Product.Unit.KG, current_stock=Decimal("100")
+        )
+        crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": harina, "quantity": Decimal("2.5")}],
+        )
+
+        resultado = productos_mas_vendidos(company=self.company)
+
+        self.assertEqual(resultado[0]["unit"], Product.Unit.KG)
 
     def test_orders_by_quantity_sold_descending(self):
         goma = ProductFactory(company=self.company, name="Goma", current_stock=Decimal("100"))

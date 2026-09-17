@@ -1,3 +1,5 @@
+from decimal import ROUND_HALF_UP, Decimal
+
 from django.db import models
 
 from companies.models import Company
@@ -38,3 +40,27 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+
+def formatear_cantidad(cantidad, unit: str) -> str:
+    """Formatea una cantidad para texto libre (ver
+    assistant/orchestrator.py, docs/DECISIONS.md ADR-024): el stock y
+    las cantidades vendidas se guardan con 3 decimales para soportar
+    kg/lt fraccionarios (ver Product.current_stock), pero mostrarle al
+    LLM "10.000" para algo vendido por unidad — un conteo entero — se
+    lee como si fuera un decimal real, y el modelo lo repite tal cual
+    en una respuesta de texto libre (responder/asesoria), donde nadie
+    lo recorta como sí hace el frontend (formatQuantity) para las
+    formas estructuradas.
+
+    Para unit="unidad" siempre redondea a entero: nunca tiene sentido
+    vender "3.5 unidades". Para kg/lt preserva decimales reales, solo
+    recorta los ceros de más ("2.500" -> "2.5", "10.000" -> "10").
+    """
+    numero = Decimal(str(cantidad))
+    if unit == Product.Unit.UNIDAD:
+        return str(int(numero.to_integral_value(rounding=ROUND_HALF_UP)))
+    entero = numero.to_integral_value()
+    if numero == entero:
+        return str(int(numero))
+    return f"{numero.normalize():f}"

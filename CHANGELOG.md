@@ -5,6 +5,25 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Las cantidades por unidad se mostraban con decimales espurios en el chat
+
+Bug encontrado en vivo, probando el nuevo intent "asesoria": la
+sugerencia de marketing decía "los lápices de colores han vendido
+5.000 unidades frente a las 10.000 de la regla" — cantidades vendidas
+por unidad (un conteo entero) mostrando ".000" como si fueran
+decimales reales. La causa: `current_stock`/`quantity` se guardan con
+3 decimales para soportar kg/lt fraccionarios, y el contexto que se le
+arma al LLM (catálogo, ranking de ventas) mandaba el Decimal crudo —
+una respuesta de texto libre simplemente repite lo que se le da, sin
+recortar los ceros de más como sí hace el frontend para las formas
+estructuradas.
+
+Se agregó `catalog.models.formatear_cantidad(cantidad, unit)`: entero
+para `unit="unidad"` (nunca "3.5 unidades"), decimales reales
+preservados para `kg`/`lt`. Se usa al armar el contexto de catálogo y
+de ranking de ventas que se le manda al LLM. Ver ADR-024
+(`docs/DECISIONS.md`).
+
 ### Nuevo intent "asesoria": sugerencias de marketing basadas en datos reales
 
 Pedido en vivo, no un bug: después de ver el ranking de productos más

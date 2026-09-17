@@ -6,6 +6,7 @@ from django.test import TestCase
 from accounts.factories import UserFactory
 from cashbox.models import CashMovement
 from catalog.factories import ProductFactory
+from catalog.models import Product
 from companies.factories import CompanyFactory
 from sales.models import Sale
 from sales.services import crear_venta
@@ -39,6 +40,31 @@ class ConstruirContextoCatalogoTests(TestCase):
         contexto = _construir_contexto_catalogo(company)
 
         self.assertIn("stock actual: 10", contexto)
+
+    def test_stock_de_producto_por_unidad_no_muestra_decimales_espurios(self):
+        # Bug real (ver docs/DECISIONS.md ADR-024): el campo se guarda
+        # con 3 decimales, así que sin formatear se leía "10.000" — el
+        # modelo lo repetía tal cual en una respuesta de texto libre
+        # (responder/asesoria), como si fuera un decimal real.
+        company = CompanyFactory()
+        ProductFactory(
+            company=company, name="Regla", unit=Product.Unit.UNIDAD, current_stock=Decimal("10")
+        )
+
+        contexto = _construir_contexto_catalogo(company)
+
+        self.assertNotIn("10.000", contexto)
+        self.assertIn("stock actual: 10 unidad", contexto)
+
+    def test_stock_de_producto_por_kg_preserva_decimales_reales(self):
+        company = CompanyFactory()
+        ProductFactory(
+            company=company, name="Harina", unit=Product.Unit.KG, current_stock=Decimal("2.5")
+        )
+
+        contexto = _construir_contexto_catalogo(company)
+
+        self.assertIn("stock actual: 2.5 kg", contexto)
 
     def test_incluye_precio_actual_de_cada_producto(self):
         # Mismo razonamiento que el stock: sin el precio actual en el
@@ -616,6 +642,42 @@ class ConstruirContextoVentasResumenTests(TestCase):
 
         self.assertIn("Goma", contexto)
         self.assertIn("10", contexto)
+
+    def test_producto_por_unidad_no_muestra_decimales_espurios(self):
+        # Bug real (ver docs/DECISIONS.md ADR-024): la cantidad vendida
+        # se guarda con 3 decimales, así que sin formatear el ranking
+        # decía "10.000 unidad vendidas" — el asistente lo repetía tal
+        # cual en una sugerencia de marketing (intent "asesoria").
+        product = ProductFactory(
+            company=self.company,
+            name="Regla",
+            unit=Product.Unit.UNIDAD,
+            current_stock=Decimal("100"),
+        )
+        crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": product, "quantity": Decimal("10")}],
+        )
+
+        contexto = _construir_contexto_ventas_resumen(self.company)
+
+        self.assertNotIn("10.000", contexto)
+        self.assertIn("10 unidad vendidas", contexto)
+
+    def test_producto_por_kg_preserva_decimales_reales(self):
+        product = ProductFactory(
+            company=self.company, name="Harina", unit=Product.Unit.KG, current_stock=Decimal("100")
+        )
+        crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": product, "quantity": Decimal("2.5")}],
+        )
+
+        contexto = _construir_contexto_ventas_resumen(self.company)
+
+        self.assertIn("2.5 kg vendidas", contexto)
 
     def test_excluye_ventas_de_otras_empresas(self):
         other_company = CompanyFactory()

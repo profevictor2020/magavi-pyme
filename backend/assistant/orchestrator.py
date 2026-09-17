@@ -43,6 +43,16 @@ de "responder", que nunca inventa nada. Igual se le exige basarse en
 datos reales del negocio (catálogo, ranking de ventas, gastos
 recientes) para que la sugerencia sea concreta, no genérica; y está
 acotado a consejos de negocio de esta pyme, nunca temas sin relación.
+
+Cantidades en el contexto (ver docs/DECISIONS.md ADR-024): stock y
+unidades vendidas se guardan con 3 decimales para soportar kg/lt
+fraccionarios, pero mostrarle al LLM "10.000" para algo vendido por
+unidad se lee como un decimal real — y en una respuesta de texto libre
+(responder/asesoria) el modelo lo repite tal cual, sin el recorte de
+ceros que sí aplica el frontend a las formas estructuradas. Por eso
+_construir_contexto_catalogo y _construir_contexto_ventas_resumen usan
+catalog.models.formatear_cantidad(cantidad, unit): entero para
+unit="unidad" (nunca "3.5 unidades"), decimales reales solo para kg/lt.
 """
 
 import json
@@ -52,7 +62,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from cashbox.models import CashMovement
-from catalog.models import Product
+from catalog.models import Product, formatear_cantidad
 from core.json_utils import parse_json_object
 from sales.services import productos_mas_vendidos
 
@@ -294,7 +304,8 @@ def _construir_contexto_catalogo(company) -> str:
     if not productos:
         return "Catálogo de la empresa: (sin productos registrados todavía)."
     lineas = [
-        f"- product_id={p.id}: {p.name} (stock actual: {p.current_stock}, "
+        f"- product_id={p.id}: {p.name} (stock actual: "
+        f"{formatear_cantidad(p.current_stock, p.unit)} {p.unit}, "
         f"precio actual: {p.default_price})"
         for p in productos
     ]
@@ -371,7 +382,8 @@ def _construir_contexto_ventas_resumen(company) -> str:
     if not ranking:
         return ""
     lineas = [
-        f"- {p['product_name']}: {p['quantity']} unidades vendidas en total (${p['total']})"
+        f"- {p['product_name']}: {formatear_cantidad(p['quantity'], p['unit'])} "
+        f"{p['unit']} vendidas en total (${p['total']})"
         for p in ranking
     ]
     return (

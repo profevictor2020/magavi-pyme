@@ -1221,3 +1221,70 @@ contexto de sistema (cuando hay ventas registradas) — mismo trade-off
 de tokens que los demás contextos de grounding, aceptado por la misma
 razón: sin datos reales, la funcionalidad no cumple lo que el usuario
 pidió. Sin cambios de base de datos ni del Tool Layer.
+
+---
+
+## ADR-024 — Cantidades en el contexto del LLM: enteras o con decimales según la unidad
+
+**Contexto:** probando `asesoria` (ADR-023) en vivo, la sugerencia de
+marketing decía "los lápices de colores han vendido 5.000 unidades
+frente a las 10.000 de la regla" — el usuario lo notó: "las unidades
+las trata como flotante, debería saber cuándo es flotante según la
+unidad de medida, kgs, grs, litros, etc." La causa: `current_stock` y
+`quantity` se guardan con 3 decimales (`Product.current_stock`,
+soportan kg/lt fraccionarios), así que un producto vendido por
+"unidad" con 10 unidades vendidas en realidad es `Decimal("10.000")`
+en la base de datos. El frontend ya recorta esos ceros de más para
+mostrar resultados estructurados (`formatQuantity` en
+`lib/format.ts`), pero el contexto que se le arma al LLM
+(`_construir_contexto_catalogo`, `_construir_contexto_ventas_resumen`)
+interpolaba el Decimal crudo — y una respuesta de texto libre
+(`responder`/`asesoria`) simplemente repite lo que se le dio, sin
+ningún recorte.
+
+**Decisión:** se agrega `catalog.models.formatear_cantidad(cantidad,
+unit)`: para `unit="unidad"` siempre redondea a entero (nunca tiene
+sentido vender "3.5 unidades", así que ni vale la pena mostrar
+decimales aunque el dato los traiga); para `unit` en `kg`/`lt`
+preserva decimales reales, solo recorta los ceros de más (mismo
+resultado que `formatQuantity` del frontend, pero explícito por
+unidad en vez de "cualquier entero se ve como entero"). Se usa en los
+dos contextos que ya mandan cantidades al LLM
+(`_construir_contexto_catalogo` para stock,
+`_construir_contexto_ventas_resumen` para unidades vendidas) — para el
+segundo, se agregó `unit` al diccionario que devuelve
+`sales.services.productos_mas_vendidos` (antes solo traía
+`product_id`/`product_name`/`quantity`/`total`), reutilizando el mismo
+`.values()` que ya hace join con `Product` sin costo extra de consulta.
+
+**Por qué no bastaba con lo que ya hacía el frontend:** `formatQuantity`
+del frontend es "cualquier entero se ve sin decimales, cualquier
+fracción real conserva sus decimales" — funciona bien porque nunca le
+importa CUÁL es la unidad, solo si el valor de por sí es entero o no.
+Eso es correcto para mostrar en pantalla. Pero el LLM no solo muestra
+el dato: lo USA para razonar y redactar texto libre, y ahí sí importa
+la semántica — "10 unidades" es un conteo, nunca debería llevar
+decimales aunque el valor almacenado fuera fraccionario por error;
+"2.5 kg" si es genuinamente fraccionario. Formatear por unidad en el
+backend, antes de que el dato llegue al prompt, es más robusto que
+confiar en que el LLM infiera solo la diferencia.
+
+**Alternativas consideradas:**
+- *Cambiar `current_stock`/`quantity` a un tipo entero cuando
+  `unit="unidad"`:* descartado — requeriría una migración condicional
+  por fila y complicaría el modelo sin necesidad; el dato real
+  (siempre un entero para "unidad" en la práctica) no cambia, solo
+  cómo se le muestra al LLM.
+- *Dejar que el LLM infiera "no muestres decimales para conteos
+  enteros" solo con una instrucción en el `SYSTEM_PROMPT`, sin cambiar
+  el dato:* menos confiable — ya se vio en vivo que el modelo repite
+  literalmente lo que se le da en el contexto; es más robusto no
+  dejarle la oportunidad de copiar el ".000".
+
+**Consecuencias:** `sales.services.productos_mas_vendidos` ahora
+incluye `unit` en cada fila (cambio aditivo, no rompe a quien ya
+consumía `product_id`/`product_name`/`quantity`/`total`). Sin cambios
+de base de datos, de la API pública del asistente, ni del frontend —
+`formatQuantity` ya hacía lo correcto para las formas estructuradas
+que muestra en pantalla; el fix es enteramente del lado del contexto
+que arma el backend para el LLM.
