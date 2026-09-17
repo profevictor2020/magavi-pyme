@@ -5,6 +5,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nueva respuesta "responder": el asistente ya puede contestar sin ejecutar una acción
+
+Bug encontrado en vivo, justo después de arreglar la memoria
+conversacional (ver más abajo): al listar los gastos del mes y
+preguntar "y este gasto de qué es", el modelo ahora sí identificaba
+correctamente a qué gasto se refería el usuario, pero igual respondía
+`no_entendido` — porque el sistema solo sabía producir dos tipos de
+resultado: una acción del Tool Layer, o "no entendí". No existía forma
+de dar una respuesta puramente informativa cuando el modelo ya tenía
+el dato (o sabía que faltaba) sin necesidad de ejecutar nada nuevo.
+
+Se agregó un intent `responder` que el modelo usa solo cuando la
+pregunta ya se puede contestar con datos reales del catálogo, el
+contexto reciente o el historial de la conversación — nunca
+inventando un dato que no tiene. Este intent no pasa por
+`proponer_intent`/el Tool Layer (no crea propuestas pendientes, no lee
+ni escribe en la base de datos): el resultado llega como un nuevo
+status `"answered"` que el frontend muestra igual que un mensaje de
+"no entendí" (texto simple, con lectura en voz alta si corresponde).
+Ver ADR-021 (`docs/DECISIONS.md`).
+
 ### Memoria conversacional real: el asistente ahora ve los mensajes anteriores
 
 Bug de fondo, no puntual: después de listar los gastos del mes

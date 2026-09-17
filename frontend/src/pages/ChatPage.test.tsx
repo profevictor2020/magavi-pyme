@@ -100,4 +100,24 @@ describe('ChatPage', () => {
 
     await waitFor(() => expect(screen.getByText('¿Puedes darme más detalles?')).toBeInTheDocument())
   })
+
+  it('muestra la respuesta directa del asistente cuando no hace falta ejecutar una acción', async () => {
+    mockedAssistantApi.chat.mockResolvedValue({
+      conversation_id: 3,
+      status: 'answered',
+      message: 'Ese gasto de servicios no tiene una descripción registrada.',
+    })
+
+    const user = userEvent.setup()
+    render(<ChatPage />)
+
+    await user.type(screen.getByPlaceholderText('Escribe un mensaje…'), 'y este gasto de qué es')
+    await user.click(screen.getByText('Enviar'))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Ese gasto de servicios no tiene una descripción registrada.'),
+      ).toBeInTheDocument(),
+    )
+  })
 })

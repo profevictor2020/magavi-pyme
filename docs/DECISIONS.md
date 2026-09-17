@@ -964,3 +964,88 @@ realmente sostenga una conversación en vez de tratar cada mensaje como
 aislado. Sin conversación (`conversation=None`, el caso de
 `/api/assistant/intents/` sin chat) el comportamiento no cambia: no hay
 historial que construir.
+
+---
+
+## ADR-021 — Intent `responder`: respuestas informativas sin pasar por el Tool Layer
+
+**Contexto:** con la memoria conversacional de ADR-020 ya funcionando,
+se volvió a probar en vivo la misma secuencia: listar los gastos del
+mes ("Servicios: $18.500...") y luego preguntar "y este gasto de qué
+es". Esta vez el modelo sí resolvió correctamente la referencia — supo
+que "este gasto" era el de servicios — pero igual respondió
+`no_entendido`, explicando literalmente que "ese gasto no tiene
+descripción registrada, así que no hay información para responder".
+El problema ya no era de interpretación (eso quedó resuelto), sino de
+diseño: `interpretar_y_proponer` solo sabe producir dos tipos de
+resultado — una acción del Tool Layer (`proponer_intent`, mutación o
+consulta) o `no_entendido`. No existe una tercera opción para "ya sé
+la respuesta, pero no es el resultado de ejecutar nada nuevo".
+
+**Decisión:** se agrega `responder` como un intent más en el
+`SYSTEM_PROMPT`, pero de una naturaleza distinta a todos los demás:
+`{"intent": "responder", "parameters": {"respuesta": "<texto>"}}` es
+una respuesta puramente informativa que el modelo arma a partir de lo
+que ya tiene — catálogo, contexto de vocabulario/gastos recientes, o
+el historial de la propia conversación — sin ejecutar ninguna acción
+nueva. En `interpretar_y_proponer`, este intent se maneja con una
+rama propia ANTES de `proponer_intent`: nunca toca el Tool Layer, no
+crea `PendingAction`, no lee ni escribe nada en la base de datos más
+allá de guardar los mensajes de la conversación como siempre. El
+resultado queda como `{"status": "answered", "message": ...}`, un
+tercer status junto a `no_entendido`/`error`/`executed`/
+`pending_confirmation` que el frontend muestra igual que
+`no_entendido` (burbuja de texto simple, con lectura en voz alta si
+el mensaje vino por micrófono).
+
+El riesgo obvio de este diseño es que el modelo "invente" un dato de
+negocio (un monto, un stock, una fecha) en vez de decir que no lo
+sabe. Se mitiga solo con la instrucción del prompt, no con validación
+de código — porque no hay Tool Layer que valide un texto libre —:
+`responder` se documenta explícitamente como "solo cuando la pregunta
+YA se puede responder con datos reales que ya tienes... NUNCA inventes
+un dato que no esté realmente en el catálogo/contexto/historial", y la
+regla de `no_entendido` se amplía para cubrir el caso "la respuesta
+requeriría adivinar o no tienes el dato real". Es la misma estrategia
+de "grounding" que ya se usa para el resto de los intents (dar
+contexto real en vez de dejar que el modelo adivine), aplicada ahora
+también a cuándo el modelo tiene permiso de responder directo.
+
+**Por qué esto no compromete la integridad de los datos de negocio:**
+`responder` nunca puede mutar nada — no pasa por `proponer_intent`, así
+que no existe camino para que una alucinación del modelo se convierta
+en una escritura real. En el peor caso, el usuario recibe una
+respuesta de texto incorrecta y puede corregir al asistente en el
+siguiente turno (que sí queda grounded en el historial, ver ADR-020).
+Es un riesgo estrictamente menor al que ya existía: un `no_entendido`
+mal explicado también podía contener una afirmación equivocada del
+modelo sobre por qué no entendió.
+
+**Alternativas consideradas:**
+- *Ampliar `no_entendido` para que devuelva directamente la respuesta
+  cuando el modelo "sabe" pero no hay acción:* confunde dos casos con
+  semántica de UI distinta — `no_entendido` implica "esto no se
+  entendió, aclara"; `responder` implica "aquí está la respuesta". El
+  frontend y el usuario necesitan poder distinguirlos a futuro (por
+  ejemplo, si se quisiera loguear tasas de `no_entendido` como métrica
+  de calidad, mezclar los dos la ensuciaría).
+- *Crear un intent de Tool Layer `consultar_detalle_gasto` (u otro
+  específico) en vez de una respuesta genérica:* resuelve el caso
+  puntual de gastos, pero no generaliza — cualquier pregunta de
+  seguimiento sobre datos ya mostrados ("¿y esa venta a qué hora fue?",
+  "¿ese producto en qué categoría está?") necesitaría su propio intent
+  nuevo. `responder` cubre la clase completa de "pregunta de
+  seguimiento sobre datos que ya están en contexto/historial" sin
+  multiplicar intents de un solo uso.
+- *Dejar que el frontend arme la respuesta localmente a partir del
+  historial, sin ida y vuelta al LLM:* descartado — requeriría
+  reimplementar en el cliente la misma resolución de referencias en
+  lenguaje natural que el LLM ya hace bien, duplicando lógica y
+  perdiendo la ventaja de que todo el entendimiento del lenguaje vive
+  en un solo lugar (`orchestrator.py`).
+
+**Consecuencias:** un tercer status (`answered`) se suma a la API de
+`/api/assistant/chat/` — cualquier cliente nuevo del endpoint debe
+tratarlo igual que `no_entendido`/`error` (texto simple, sin acción
+pendiente). No hay migración de base de datos ni cambios al Tool
+Layer: es puramente una rama nueva en el orquestador y en el prompt.

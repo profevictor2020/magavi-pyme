@@ -152,10 +152,23 @@ no sobre el catálogo completo)
 - consultar_catalogo: {} (para "¿qué productos tenemos?", "lista el \
 catálogo", o cualquier pregunta sobre el catálogo completo, no de un \
 producto puntual)
+- responder: {"respuesta": "<texto breve, en español>"}. Úsalo SOLO \
+cuando la pregunta del usuario YA se puede responder con datos reales \
+que ya tienes — del catálogo, del contexto de vocabulario/gastos \
+recientes, o de lo que se mostró en el historial de esta misma \
+conversación — sin necesitar ejecutar ninguna acción nueva del listado \
+de arriba. Ej.: después de mostrar un gasto sin descripción, "¿de qué \
+es este gasto?" se responde con responder (ej. "Ese gasto de servicios \
+por $18.500 no tiene una descripción registrada — puedes agregársela \
+diciéndomelo"), en vez de no_entendido. NUNCA inventes un dato que no \
+esté realmente en el catálogo/contexto/historial — si la respuesta \
+requeriría adivinar o no tienes el dato real, usa no_entendido en vez \
+de inventarlo.
 
 Si no puedes determinar con certeza qué acción corresponde (falta \
-información, el mensaje es ambiguo, o no corresponde a ninguna de estas \
-acciones), responde exactamente:
+información, el mensaje es ambiguo, no corresponde a ninguna de estas \
+acciones, o requeriría un dato que no tienes realmente), responde \
+exactamente:
 
 {"intent": "no_entendido", "parameters": {"motivo": "<breve explicación>"}}
 
@@ -334,6 +347,19 @@ def _mensaje_no_entendido(intent_dict) -> str:
     return "No logré entender qué necesitas hacer. ¿Puedes reformularlo?"
 
 
+def _mensaje_para_responder(intent_dict) -> str:
+    """"responder" (ver SYSTEM_PROMPT y docs/DECISIONS.md ADR-021): el
+    modelo ya tiene la respuesta a partir del catálogo/contexto/
+    historial de la conversación, y no hace falta ejecutar ninguna
+    acción del Tool Layer — es una respuesta puramente informativa, no
+    una mutación ni una consulta nueva a la base de datos.
+    """
+    respuesta = (intent_dict or {}).get("parameters", {}).get("respuesta")
+    if respuesta:
+        return respuesta
+    return _mensaje_no_entendido(intent_dict)
+
+
 def _mensaje_para_resultado(resultado: dict) -> str:
     if resultado["status"] == "pending_confirmation":
         return (
@@ -428,6 +454,12 @@ def interpretar_y_proponer(*, company, user, mensaje, conversation=None, llm_pro
     if intent_dict is None or intent_dict.get("intent") == "no_entendido":
         respuesta_texto = _mensaje_no_entendido(intent_dict)
         resultado = {"status": "no_entendido", "message": respuesta_texto}
+    elif intent_dict.get("intent") == "responder":
+        # No pasa por proponer_intent/el Tool Layer: no es una acción,
+        # es información que el modelo ya tenía (ver
+        # _mensaje_para_responder) — nada que ejecutar ni confirmar.
+        respuesta_texto = _mensaje_para_responder(intent_dict)
+        resultado = {"status": "answered", "message": respuesta_texto}
     else:
         try:
             ejecutado = proponer_intent(

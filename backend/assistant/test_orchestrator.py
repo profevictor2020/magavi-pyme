@@ -730,3 +730,72 @@ class MemoriaConversacionalTests(TestCase):
         # que reconstruir — solo el system prompt/contexto y el mensaje
         # actual, como antes de este cambio.
         self.assertEqual(roles.count("user"), 1)
+
+
+class ResponderIntentTests(TestCase):
+    """Ver docs/DECISIONS.md ADR-021: una pregunta que ya se puede
+    responder con datos reales del contexto/historial no debería caer
+    en no_entendido solo porque no hay una acción del Tool Layer que
+    ejecutar — "responder" es información, no una acción."""
+
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+
+    def test_responder_no_pasa_por_el_tool_layer(self):
+        llm = FakeLLMProvider(
+            [_json("responder", {"respuesta": "Ese gasto no tiene descripción registrada."})]
+        )
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="y este gasto de qué es",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "answered")
+        self.assertEqual(resultado["message"], "Ese gasto no tiene descripción registrada.")
+        # No se creó ninguna PendingAction ni se tocó ningún Tool Layer.
+        self.assertEqual(PendingAction.objects.for_company(self.company).count(), 0)
+
+    def test_responder_sin_respuesta_cae_a_no_entendido(self):
+        # Si el modelo manda "responder" sin el parámetro esperado, no
+        # hay que inventar un mensaje vacío — se trata igual que un
+        # no_entendido genérico.
+        llm = FakeLLMProvider([_json("responder", {})])
+
+        resultado = interpretar_y_proponer(
+            company=self.company, user=self.user, mensaje="algo raro", llm_provider=llm
+        )
+
+        self.assertEqual(resultado["status"], "answered")
+        self.assertTrue(resultado["message"])
+
+    def test_respuesta_de_responder_queda_en_el_historial_para_el_siguiente_mensaje(self):
+        conversation = Conversation.objects.create(company=self.company, user=self.user)
+        llm = FakeLLMProvider(
+            [
+                _json("responder", {"respuesta": "Ese gasto de servicios no tiene descripción."}),
+                _json("consultar_gastos"),
+            ]
+        )
+
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="y este gasto de qué es",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="ya, gracias",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+
+        segunda_llamada = llm.llamadas[1]
+        contenidos = " ".join(m["content"] for m in segunda_llamada)
+        self.assertIn("Ese gasto de servicios no tiene descripción.", contenidos)

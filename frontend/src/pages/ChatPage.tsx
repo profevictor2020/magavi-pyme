@@ -178,7 +178,11 @@ export function ChatPage() {
       const response = await assistantApi.chat(companyId, text, conversationId)
       setConversationId(response.conversation_id)
 
-      if (response.status === 'no_entendido' || response.status === 'error') {
+      if (
+        response.status === 'no_entendido' ||
+        response.status === 'error' ||
+        response.status === 'answered'
+      ) {
         appendMessage({ id: nextId(), role: 'assistant', text: response.message })
         if (viaVoice) void speak(response.message)
       } else if (response.status === 'executed') {
