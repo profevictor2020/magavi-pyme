@@ -64,10 +64,13 @@ export function ResultView({ result }: { result: unknown }) {
   }
 
   if (isProduct(result)) {
+    // Misma forma para crear_producto y actualizar_producto — el texto
+    // no dice "creado" ni "actualizado" porque no sabe cuál de los dos
+    // intents lo generó, solo el estado final del producto.
     return (
       <div className="result-card">
         <strong>
-          Producto creado: {result.name} ({formatCLP(result.default_price)})
+          {result.name} — {formatCLP(result.default_price)}
         </strong>
         <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
           Stock: {formatQuantity(result.current_stock)} {result.unit}

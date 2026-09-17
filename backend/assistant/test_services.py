@@ -164,6 +164,21 @@ class ConfirmarIntentTests(TestCase):
         self.assertEqual(product.name, "Café molido")
         self.assertEqual(product.current_stock, Decimal("5.000"))
 
+    def test_confirm_actualizar_producto_updates_the_price(self):
+        propuesta = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="actualizar_producto",
+            raw_parameters={"product_id": self.product.id, "default_price": "890"},
+        )
+
+        product = confirmar_intent(
+            company=self.company, user=self.user, pending_action_id=propuesta["pending_action_id"]
+        )
+
+        self.assertEqual(product.default_price, Decimal("890.00"))
+        self.assertEqual(product.current_stock, Decimal("10.000"))
+
     def test_double_confirm_is_rejected_and_does_not_duplicate(self):
         propuesta = self._proponer_venta()
         confirmar_intent(

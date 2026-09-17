@@ -37,6 +37,22 @@ class CrearProductoIntentSerializer(serializers.Serializer):
     )
 
 
+class ActualizarProductoIntentSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+    name = serializers.CharField(max_length=255, required=False)
+    default_price = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    default_cost = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    low_stock_threshold = serializers.DecimalField(
+        max_digits=12, decimal_places=3, required=False
+    )
+
+    def validate(self, attrs):
+        campos_editables = ("name", "default_price", "default_cost", "low_stock_threshold")
+        if not any(field in attrs for field in campos_editables):
+            raise serializers.ValidationError("Debes indicar al menos un campo para actualizar.")
+        return attrs
+
+
 class IntentEnvelopeSerializer(serializers.Serializer):
     """Forma del cuerpo de POST /api/assistant/intents/. `intent` no se
     restringe aquí a una lista cerrada de choices para evitar un import

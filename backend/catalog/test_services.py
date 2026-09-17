@@ -10,7 +10,7 @@ from inventory.models import InventoryMovement
 
 from .factories import ProductFactory
 from .models import Product
-from .services import crear_producto
+from .services import actualizar_producto, crear_producto
 
 
 class CrearProductoTests(TestCase):
@@ -82,4 +82,76 @@ class CrearProductoTests(TestCase):
         )
 
         entry = AuditLog.objects.get(entity_type="Product", entity_id=str(product.id))
+        self.assertEqual(entry.source, AuditLog.Source.ASSISTANT)
+
+
+class ActualizarProductoTests(TestCase):
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+        self.product = ProductFactory(
+            company=self.company,
+            name="Goma",
+            default_price=Decimal("500.00"),
+            default_cost=Decimal("200.00"),
+        )
+
+    def test_updates_only_the_given_field(self):
+        product = actualizar_producto(
+            company=self.company, user=self.user, product=self.product, default_price=Decimal("890")
+        )
+
+        self.assertEqual(product.default_price, Decimal("890.00"))
+        # Los campos no mencionados quedan intactos.
+        self.assertEqual(product.default_cost, Decimal("200.00"))
+        self.assertEqual(product.name, "Goma")
+
+    def test_updates_multiple_fields_at_once(self):
+        product = actualizar_producto(
+            company=self.company,
+            user=self.user,
+            product=self.product,
+            name="Goma de borrar",
+            default_price=Decimal("990"),
+            low_stock_threshold=Decimal("5"),
+        )
+
+        self.assertEqual(product.name, "Goma de borrar")
+        self.assertEqual(product.default_price, Decimal("990.00"))
+        self.assertEqual(product.low_stock_threshold, Decimal("5.000"))
+
+    def test_never_touches_current_stock(self):
+        self.product.current_stock = Decimal("42")
+        self.product.save(update_fields=["current_stock"])
+
+        product = actualizar_producto(
+            company=self.company, user=self.user, product=self.product, default_price=Decimal("890")
+        )
+
+        self.assertEqual(product.current_stock, Decimal("42.000"))
+
+    def test_rejects_call_with_no_fields_to_update(self):
+        with self.assertRaises(ValidationError):
+            actualizar_producto(company=self.company, user=self.user, product=self.product)
+
+    def test_writes_audit_log_with_before_and_after(self):
+        actualizar_producto(
+            company=self.company, user=self.user, product=self.product, default_price=Decimal("890")
+        )
+
+        entry = AuditLog.objects.get(entity_type="Product", entity_id=str(self.product.id))
+        self.assertEqual(entry.action, "product.update")
+        self.assertEqual(entry.before["default_price"], "500.00")
+        self.assertEqual(entry.after["default_price"], "890")
+
+    def test_assistant_origin_maps_to_assistant_audit_source(self):
+        actualizar_producto(
+            company=self.company,
+            user=self.user,
+            product=self.product,
+            default_price=Decimal("890"),
+            origen="assistant",
+        )
+
+        entry = AuditLog.objects.get(entity_type="Product", entity_id=str(self.product.id))
         self.assertEqual(entry.source, AuditLog.Source.ASSISTANT)

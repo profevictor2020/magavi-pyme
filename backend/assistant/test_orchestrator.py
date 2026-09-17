@@ -30,6 +30,18 @@ class ConstruirContextoCatalogoTests(TestCase):
 
         self.assertIn("stock actual: 10", contexto)
 
+    def test_incluye_precio_actual_de_cada_producto(self):
+        # Mismo razonamiento que el stock: sin el precio actual en el
+        # contexto, el modelo no puede calcular un valor final cuando el
+        # usuario da un cambio relativo (ver SYSTEM_PROMPT,
+        # actualizar_producto).
+        company = CompanyFactory()
+        ProductFactory(company=company, name="Goma", default_price=Decimal("500.00"))
+
+        contexto = _construir_contexto_catalogo(company)
+
+        self.assertIn("precio actual: 500.00", contexto)
+
 
 class InterpretarYProponerTests(TestCase):
     def setUp(self):
@@ -144,6 +156,25 @@ class InterpretarYProponerTests(TestCase):
 
         self.assertEqual(resultado["status"], "pending_confirmation")
         self.assertEqual(resultado["intent"], "crear_producto")
+
+    def test_mensaje_de_actualizar_precio_crea_propuesta_pendiente(self):
+        llm = FakeLLMProvider(
+            [_json("actualizar_producto", {"product_id": self.product.id, "default_price": "890"})]
+        )
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="el valor unitario de la goma es de 890 pesos",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "pending_confirmation")
+        self.assertEqual(resultado["intent"], "actualizar_producto")
+        self.product.refresh_from_db()
+        # La propuesta no ejecuta nada todavía — el precio real no cambia
+        # hasta que se confirme (ver assistant/test_services.py).
+        self.assertNotEqual(self.product.default_price, Decimal("890.00"))
 
     def test_intent_con_producto_de_otra_empresa_no_se_ejecuta(self):
         other_company = CompanyFactory()

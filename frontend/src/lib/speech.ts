@@ -153,8 +153,10 @@ export function describeResultForSpeech(result: unknown): string {
   }
 
   if (isProduct(result)) {
+    // Misma forma para crear_producto y actualizar_producto (ver
+    // ResultView) — frase neutra, no dice "creado" ni "actualizado".
     return (
-      `Producto creado: ${result.name}, precio ${formatCLP(result.default_price)}, ` +
+      `${result.name}: precio ${formatCLP(result.default_price)}, ` +
       `stock ${formatQuantity(result.current_stock)}.`
     )
   }

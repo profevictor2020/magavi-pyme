@@ -52,6 +52,19 @@ le exijas al usuario decir literalmente la palabra "motivo".
 - crear_producto: {"name": "<texto>", "unit": "<unidad|kg|lt, opcional>", \
 "default_price": "<numero opcional>", "default_cost": "<numero opcional>", \
 "initial_stock": "<numero opcional>"}
+- actualizar_producto: {"product_id": <int>, "name": "<opcional>", \
+"default_price": "<opcional>", "default_cost": "<opcional>", \
+"low_stock_threshold": "<opcional>"}. Úsalo cuando el usuario quiere \
+cambiar un dato de un producto QUE YA EXISTE (precio, costo, nombre, \
+mínimo de stock bajo) — nunca para cambiar la cantidad en stock, eso es \
+siempre ajustar_inventario. Incluye SOLO los campos que el usuario \
+quiere cambiar, no repitas los que no menciona. Si el usuario da un \
+valor final ("el precio de la goma es 890", "ponle 890 a la goma", \
+"cambia el valor de X a Y") usa ese valor directo en "default_price". Si \
+en cambio da un cambio relativo ("sube el precio de X en 100", "bájale \
+50 al precio de Y"), calcula tú el nuevo valor final usando el precio \
+actual que aparece en el catálogo (nuevo valor = precio actual ± \
+cambio) — no le pidas al usuario que haga la cuenta.
 - consultar_ventas: {}
 - consultar_stock_bajo: {}
 - consultar_stock_producto: {"product_id": <int>} (para preguntas sobre \
@@ -79,19 +92,27 @@ nunca tú."""
 
 
 def _construir_contexto_catalogo(company) -> str:
-    """Incluye el stock actual de cada producto (no solo su id/nombre): es
-    lo que le permite al modelo calcular un delta cuando el usuario da un
-    valor final/absoluto en vez de un cambio (ver SYSTEM_PROMPT,
-    ajustar_inventario) — "grounding" del LLM contra el estado real, no
-    hacerlo adivinar a ciegas.
+    """Incluye el stock y precio actuales de cada producto (no solo su
+    id/nombre): es lo que le permite al modelo calcular un delta cuando
+    el usuario da un valor final/absoluto en vez de un cambio (ver
+    SYSTEM_PROMPT, ajustar_inventario y actualizar_producto) —
+    "grounding" del LLM contra el estado real, no hacerlo adivinar a
+    ciegas.
     """
     productos = list(
         Product.objects.for_company(company).filter(is_active=True).order_by("name")[:200]
     )
     if not productos:
         return "Catálogo de la empresa: (sin productos registrados todavía)."
-    lineas = [f"- product_id={p.id}: {p.name} (stock actual: {p.current_stock})" for p in productos]
-    return "Catálogo de la empresa (product_id: nombre, stock actual):\n" + "\n".join(lineas)
+    lineas = [
+        f"- product_id={p.id}: {p.name} (stock actual: {p.current_stock}, "
+        f"precio actual: {p.default_price})"
+        for p in productos
+    ]
+    return (
+        "Catálogo de la empresa (product_id: nombre, stock actual, precio actual):\n"
+        + "\n".join(lineas)
+    )
 
 
 def _pedir_intent_al_llm(llm_provider, messages):

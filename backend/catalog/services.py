@@ -72,6 +72,58 @@ def crear_producto(
     return product
 
 
+def actualizar_producto(
+    *,
+    company,
+    user,
+    product,
+    name=None,
+    default_price=None,
+    default_cost=None,
+    low_stock_threshold=None,
+    origen="manual",
+):
+    """Tool Layer: modifica campos de un producto ya existente (precio,
+    costo, nombre, mínimo de stock bajo). Nunca toca `current_stock`
+    (columna cacheada exclusiva de ajustar_inventario, ver arriba) — para
+    cambiar cantidad de stock se usa ese otro flujo, no este.
+
+    Solo se actualizan los campos recibidos con un valor: permite "el
+    valor de la goma es 890" sin tener que repetir todos los demás datos
+    del producto (mismo espíritu flexible de crear_producto/
+    ajustar_inventario, ver docs/DECISIONS.md).
+    """
+    changes = {
+        "name": name,
+        "default_price": default_price,
+        "default_cost": default_cost,
+        "low_stock_threshold": low_stock_threshold,
+    }
+    changes = {field: value for field, value in changes.items() if value is not None}
+    if not changes:
+        raise ValidationError("No se indicó ningún campo para actualizar.")
+
+    before = {field: str(getattr(product, field)) for field in changes}
+
+    with transaction.atomic():
+        for field, value in changes.items():
+            setattr(product, field, value)
+        product.save(update_fields=list(changes))
+
+        registrar_auditoria(
+            company=company,
+            user=user,
+            action="product.update",
+            entity_type="Product",
+            entity_id=product.id,
+            before=before,
+            after={field: str(value) for field, value in changes.items()},
+            source=audit_source_for_origen(origen),
+        )
+
+    return product
+
+
 def consultar_stock_bajo(*, company):
     """Tool Layer de solo lectura: productos con stock bajo (ver
     docs/ROADMAP.md Fase 3/6/7). Usado por `GET /api/products/?low_stock=true`

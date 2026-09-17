@@ -5,6 +5,24 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nuevo intent: actualizar precio/datos de un producto existente
+
+Faltaba poder cambiar el precio (u otro dato) de un producto ya creado
+desde el chat — "el valor de la goma es 890" o "colócale el valor de
+890 a nuestro producto goma" caían en `no_entendido` porque no existía
+ninguna acción para eso. Nuevo `actualizar_producto`
+(`catalog/services.py::actualizar_producto`): actualiza solo los campos
+que vienen con un valor (nombre, precio, costo, mínimo de stock bajo),
+nunca toca `current_stock` (eso sigue siendo exclusivo de
+`ajustar_inventario`). El catálogo que se le pasa al LLM ahora también
+incluye el precio actual de cada producto (antes solo el stock), para
+que pueda calcular un valor final cuando el usuario da un cambio
+relativo ("sube el precio en 100") igual que ya hacía con el stock. El
+resultado reutiliza la misma forma que `crear_producto` en el frontend
+(`isProduct`); como ahora esa forma sirve para crear y para actualizar,
+se le sacó la palabra "creado" al texto/voz para que no diga algo
+incorrecto en el caso de una actualización.
+
 ### Interacción por voz en el chat (hablar, escuchar y confirmar)
 
 El chat ya permitía confirmar/cancelar una propuesta con botones; ahora

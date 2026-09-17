@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from catalog.services import (
+    actualizar_producto,
     consultar_stock_bajo,
     crear_producto,
     get_product_or_raise,
@@ -25,6 +26,7 @@ from sales.serializers import SaleCreateSerializer
 from sales.services import consultar_ventas, crear_venta
 
 from .serializers import (
+    ActualizarProductoIntentSerializer,
     AjustarInventarioIntentSerializer,
     ConsultarStockProductoIntentSerializer,
     CrearProductoIntentSerializer,
@@ -90,6 +92,20 @@ def _ejecutar_crear_producto(*, company, user, params):
     )
 
 
+def _ejecutar_actualizar_producto(*, company, user, params):
+    product = get_product_or_raise(company=company, product_id=params["product_id"])
+    return actualizar_producto(
+        company=company,
+        user=user,
+        product=product,
+        name=params.get("name"),
+        default_price=params.get("default_price"),
+        default_cost=params.get("default_cost"),
+        low_stock_threshold=params.get("low_stock_threshold"),
+        origen="assistant",
+    )
+
+
 def _ejecutar_consultar_ventas(*, company, user, params):
     return consultar_ventas(company=company)
 
@@ -134,6 +150,9 @@ INTENTS: dict[str, IntentDefinition] = {
     ),
     "crear_producto": IntentDefinition(
         CrearProductoIntentSerializer, True, _ejecutar_crear_producto
+    ),
+    "actualizar_producto": IntentDefinition(
+        ActualizarProductoIntentSerializer, True, _ejecutar_actualizar_producto
     ),
     "consultar_ventas": IntentDefinition(EmptyParamsSerializer, False, _ejecutar_consultar_ventas),
     "consultar_stock_bajo": IntentDefinition(
