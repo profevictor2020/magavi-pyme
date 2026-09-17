@@ -5,6 +5,22 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Los gastos quedaban sin descripción salvo en categoría "otro"
+
+Bug de producto encontrado en vivo: un gasto categoría "servicios" por
+$18.500 se registró sin ningún detalle — el usuario preguntó "¿de qué
+es ese gasto?" y no había forma de saberlo, porque `registrar_gasto`
+solo exigía descripción para categoría "otro" (arriendo/sueldos/
+servicios quedaban sin ella aunque el mensaje del usuario diera un
+detalle útil, ej. "pagué la cuenta de la luz"). Se amplió el
+SYSTEM_PROMPT para que el modelo incluya la descripción en cualquier
+categoría cuando el usuario da un detalle específico (sin inventar uno
+si no lo dio) — así un futuro "¿de qué fue ese gasto?" sí tiene
+respuesta. También se aclaró que `actualizar_gasto` sirve para agregar
+una descripción que faltó, no solo para corregir un error — el gasto
+de este ejemplo se puede completar diciendo algo como "el gasto de
+servicios de hoy era la cuenta de la luz".
+
 ### El service worker servía la app vieja después de cada despliegue
 
 Bug real, y probablemente la causa de varios "esto ya lo arreglaste

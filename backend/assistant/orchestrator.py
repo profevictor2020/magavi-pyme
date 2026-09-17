@@ -77,21 +77,31 @@ o renta del local; "sueldos" para remuneraciones o pagos a \
 trabajadores; "servicios" para cuentas de luz, agua, gas, internet, \
 teléfono; y "otro" para cualquier gasto que no encaje en esas tres — en \
 ese caso SIEMPRE incluye una "description" breve y clara de qué es, \
-nunca la dejes vacía. Si el gasto se parece a uno de los gastos "otro" \
-que esta empresa ya registró antes (ver el contexto de gastos recientes \
-más abajo, si viene), usa la MISMA descripción que usó antes en vez de \
-inventar una redacción nueva — así sabes que es el mismo tipo de gasto \
-recurrente.
+nunca la dejes vacía. Aunque la descripción solo es OBLIGATORIA para \
+"otro", inclúyela también en arriendo/sueldos/servicios cada vez que el \
+mensaje del usuario dé un detalle específico y útil — ej. "pagué la \
+cuenta de la luz" → category="servicios", description="Cuenta de luz" \
+(no solo "servicios" a secas); "le pagué el sueldo a Juan" → \
+category="sueldos", description="Sueldo de Juan". El dueño de la pyme \
+necesita poder recordar después de qué fue cada gasto, no solo su \
+categoría general — pero nunca inventes un detalle que el usuario no \
+dio, en ese caso deja "description" vacía. Si el gasto se parece a uno \
+de los gastos "otro" que esta empresa ya registró antes (ver el \
+contexto de gastos recientes más abajo, si viene), usa la MISMA \
+descripción que usó antes en vez de inventar una redacción nueva — así \
+sabes que es el mismo tipo de gasto recurrente.
 - actualizar_gasto: {"cash_movement_id": <int>, "amount": \
 "<opcional>", "category": "<opcional>", "description": "<opcional>"}. \
 Para corregir un gasto QUE YA SE REGISTRÓ y se ingresó mal (monto, \
 categoría o descripción equivocada) — ej. "me equivoqué, el arriendo \
 era 140000 no 150000", "ese gasto en realidad era de sueldos, no \
-servicios". Usa el cash_movement_id del contexto de gastos recientes \
-(más abajo, si viene) para identificar a cuál se refiere el usuario — \
-nunca inventes uno; si no encuentras un gasto que calce con lo que \
-describe el usuario, responde no_entendido en vez de adivinar. Incluye \
-SOLO los campos que cambian.
+servicios" — o para AGREGAR una descripción que faltó cuando se \
+registró (ej. "el gasto de servicios de hoy era la cuenta de la luz"). \
+Usa el cash_movement_id del contexto de gastos recientes (más abajo, si \
+viene) para identificar a cuál se refiere el usuario — nunca inventes \
+uno; si no encuentras un gasto que calce con lo que describe el \
+usuario, responde no_entendido en vez de adivinar. Incluye SOLO los \
+campos que cambian.
 - consultar_gastos: {} (lista los egresos manuales registrados — \
 arriendo/sueldos/servicios/otro — más recientes primero. NUNCA incluye \
 compras de inventario a proveedores, eso es otro concepto — ej. \
