@@ -1,7 +1,9 @@
+import datetime
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.utils import timezone
 
 from accounts.factories import UserFactory
 from cashbox.models import CashMovement
@@ -10,7 +12,12 @@ from companies.factories import CompanyFactory
 from inventory.models import InventoryMovement
 
 from .models import Sale
-from .services import consultar_ventas_producto, crear_venta, productos_mas_vendidos
+from .services import (
+    consultar_ventas_periodo,
+    consultar_ventas_producto,
+    crear_venta,
+    productos_mas_vendidos,
+)
 
 
 class CrearVentaTests(TestCase):
@@ -250,3 +257,78 @@ class ProductosMasVendidosTests(TestCase):
         )
 
         self.assertEqual(productos_mas_vendidos(company=self.company), [])
+
+
+class ConsultarVentasPeriodoTests(TestCase):
+    """Ver docs/DECISIONS.md ADR-022: a diferencia de consultar_ventas
+    (siempre hoy/semana), esta cubre preguntas históricas — "¿cuánto
+    llevo vendido en total?", "ventas de este año", "ventas de agosto"."""
+
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+        self.product = ProductFactory(company=self.company, current_stock=Decimal("100"))
+
+    def _venta_en_fecha(self, sold_at, quantity=Decimal("1")):
+        # sold_at es auto_now_add: se retrasa después de creada la venta,
+        # mismo patrón que en cashbox/test_services.py.
+        venta = crear_venta(
+            company=self.company,
+            user=self.user,
+            items=[{"product": self.product, "quantity": quantity}],
+        )
+        Sale.objects.filter(pk=venta.id).update(sold_at=sold_at)
+        return venta
+
+    def test_sin_argumentos_equivale_a_total_todo_el_historico(self):
+        self._venta_en_fecha(timezone.localtime() - timezone.timedelta(days=400))
+
+        resultado = consultar_ventas_periodo(company=self.company)
+
+        self.assertEqual(resultado["period"], "total")
+        self.assertEqual(resultado["count"], 1)
+
+    def test_period_mes_excluye_ventas_de_meses_anteriores(self):
+        mes_pasado = timezone.localtime().replace(day=1) - timezone.timedelta(days=1)
+        self._venta_en_fecha(mes_pasado)
+        self._venta_en_fecha(timezone.localtime())
+
+        resultado = consultar_ventas_periodo(company=self.company, period="mes")
+
+        self.assertEqual(resultado["count"], 1)
+
+    def test_period_anio_excluye_ventas_de_anios_anteriores(self):
+        hace_dos_anios = timezone.localtime().replace(year=timezone.localtime().year - 2)
+        self._venta_en_fecha(hace_dos_anios)
+        self._venta_en_fecha(timezone.localtime())
+
+        resultado = consultar_ventas_periodo(company=self.company, period="anio")
+
+        self.assertEqual(resultado["count"], 1)
+
+    def test_rango_de_fechas_explicito(self):
+        self._venta_en_fecha(timezone.localtime().replace(year=2025, month=8, day=10))
+        self._venta_en_fecha(timezone.localtime().replace(year=2025, month=9, day=1))
+
+        resultado = consultar_ventas_periodo(
+            company=self.company,
+            date_from=datetime.date(2025, 8, 1),
+            date_to=datetime.date(2025, 8, 31),
+        )
+
+        self.assertEqual(resultado["count"], 1)
+
+    def test_solo_cuenta_ventas_confirmadas_de_esta_empresa(self):
+        other_company = CompanyFactory()
+        other_user = UserFactory()
+        other_product = ProductFactory(company=other_company, current_stock=Decimal("10"))
+        crear_venta(
+            company=other_company,
+            user=other_user,
+            items=[{"product": other_product, "quantity": Decimal("5")}],
+        )
+
+        resultado = consultar_ventas_periodo(company=self.company)
+
+        self.assertEqual(resultado["count"], 0)
+        self.assertEqual(resultado["total"], "0.00")

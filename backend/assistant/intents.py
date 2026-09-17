@@ -31,6 +31,7 @@ from purchases.services import registrar_compra
 from sales.serializers import SaleCreateSerializer
 from sales.services import (
     consultar_ventas,
+    consultar_ventas_periodo,
     consultar_ventas_producto,
     crear_venta,
     productos_mas_vendidos,
@@ -40,7 +41,9 @@ from .serializers import (
     ActualizarGastoIntentSerializer,
     ActualizarProductoIntentSerializer,
     AjustarInventarioIntentSerializer,
+    ConsultarGastosIntentSerializer,
     ConsultarProductoIntentSerializer,
+    ConsultarVentasPeriodoIntentSerializer,
     ConsultarVentasProductoIntentSerializer,
     CrearProductoIntentSerializer,
     EmptyParamsSerializer,
@@ -147,11 +150,25 @@ def _ejecutar_actualizar_gasto(*, company, user, params):
 
 
 def _ejecutar_consultar_gastos(*, company, user, params):
-    return consultar_gastos(company=company)
+    return consultar_gastos(
+        company=company,
+        period=params.get("period"),
+        date_from=params.get("date_from"),
+        date_to=params.get("date_to"),
+    )
 
 
 def _ejecutar_consultar_ventas(*, company, user, params):
     return consultar_ventas(company=company)
+
+
+def _ejecutar_consultar_ventas_periodo(*, company, user, params):
+    return consultar_ventas_periodo(
+        company=company,
+        period=params.get("period"),
+        date_from=params.get("date_from"),
+        date_to=params.get("date_to"),
+    )
 
 
 def _ejecutar_consultar_ventas_producto(*, company, user, params):
@@ -217,8 +234,13 @@ INTENTS: dict[str, IntentDefinition] = {
     "actualizar_gasto": IntentDefinition(
         ActualizarGastoIntentSerializer, True, _ejecutar_actualizar_gasto
     ),
-    "consultar_gastos": IntentDefinition(EmptyParamsSerializer, False, _ejecutar_consultar_gastos),
+    "consultar_gastos": IntentDefinition(
+        ConsultarGastosIntentSerializer, False, _ejecutar_consultar_gastos
+    ),
     "consultar_ventas": IntentDefinition(EmptyParamsSerializer, False, _ejecutar_consultar_ventas),
+    "consultar_ventas_periodo": IntentDefinition(
+        ConsultarVentasPeriodoIntentSerializer, False, _ejecutar_consultar_ventas_periodo
+    ),
     "consultar_ventas_producto": IntentDefinition(
         ConsultarVentasProductoIntentSerializer, False, _ejecutar_consultar_ventas_producto
     ),

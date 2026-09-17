@@ -1,4 +1,4 @@
-import { expenseCategoryLabel, formatCLP, formatDateTime, formatQuantity } from '../lib/format'
+import { expenseCategoryLabel, formatCLP, formatDateTime, formatQuantity, periodLabel } from '../lib/format'
 import {
   isExpense,
   isExpenseList,
@@ -9,6 +9,7 @@ import {
   isProductList,
   isProductSalesSummary,
   isReceipt,
+  isSalesPeriodTotal,
   isTopSellingList,
 } from '../lib/resultShapes'
 
@@ -80,6 +81,17 @@ export function ResultView({ result }: { result: unknown }) {
         </div>
         <div>
           Esta semana: {formatCLP(result.week.total)} ({result.week.count} ventas)
+        </div>
+      </div>
+    )
+  }
+
+  if (isSalesPeriodTotal(result)) {
+    return (
+      <div className="result-card">
+        <strong>{periodLabel(result.period, result.date_from, result.date_to)}</strong>
+        <div>
+          {formatCLP(result.total)} ({result.count} ventas)
         </div>
       </div>
     )

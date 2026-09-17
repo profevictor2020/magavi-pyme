@@ -5,6 +5,7 @@ from rest_framework import serializers
 from cashbox.models import CashMovement
 from catalog.models import Product
 from catalog.serializers import AdjustStockSerializer
+from core.dates import PERIOD_CHOICES
 
 from .models import Conversation, Message
 
@@ -12,6 +13,23 @@ from .models import Conversation, Message
 class EmptyParamsSerializer(serializers.Serializer):
     """Para intents de solo lectura que no reciben parámetros
     (consultar_ventas, consultar_stock_bajo)."""
+
+
+class PeriodParamsSerializer(serializers.Serializer):
+    """Parámetros de período compartidos por las consultas históricas
+    (consultar_gastos, consultar_ventas_periodo) — ver
+    core.dates.resolve_period_range y docs/DECISIONS.md ADR-022.
+    `period` es un atajo con nombre (hoy/semana/mes/año/total) que el
+    servidor resuelve sin que el modelo necesite saber la fecha de hoy;
+    date_from/date_to son un rango explícito para cualquier otro caso
+    ("del 1 al 15 de agosto") y tienen prioridad sobre `period` si se
+    dan ambos. Todos son opcionales: sin ninguno, la consulta no filtra
+    por fecha (todo el histórico).
+    """
+
+    period = serializers.ChoiceField(choices=PERIOD_CHOICES, required=False)
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False)
 
 
 class AjustarInventarioIntentSerializer(AdjustStockSerializer):
@@ -69,6 +87,14 @@ class RegistrarGastoIntentSerializer(serializers.Serializer):
                 {"description": 'Los gastos de categoría "otro" necesitan una descripción.'}
             )
         return attrs
+
+
+class ConsultarGastosIntentSerializer(PeriodParamsSerializer):
+    pass
+
+
+class ConsultarVentasPeriodoIntentSerializer(PeriodParamsSerializer):
+    pass
 
 
 class ActualizarGastoIntentSerializer(serializers.Serializer):

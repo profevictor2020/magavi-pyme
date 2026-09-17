@@ -81,6 +81,14 @@ export interface ExpenseListItemLike {
   created_at: string
 }
 
+export interface SalesPeriodTotalLike {
+  period: string
+  date_from: string | null
+  date_to: string | null
+  total: string
+  count: number
+}
+
 export function isReceipt(value: unknown): value is ReceiptLike {
   return (
     !!value &&
@@ -141,4 +149,10 @@ export function isExpenseList(value: unknown): value is ExpenseListItemLike[] {
   // "category" también distingue esta lista (consultar_gastos) de las
   // demás formas en lista (isProductList/isLowStockList/isTopSellingList).
   return Array.isArray(value) && (value.length === 0 || 'category' in value[0])
+}
+
+export function isSalesPeriodTotal(value: unknown): value is SalesPeriodTotalLike {
+  // "period" (consultar_ventas_periodo, ver ADR-022) es exclusivo de
+  // esta forma — no colisiona con isPeriodSummary (today/week anidados).
+  return !!value && typeof value === 'object' && 'period' in value && 'total' in value
 }

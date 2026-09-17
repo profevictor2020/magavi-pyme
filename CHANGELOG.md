@@ -5,6 +5,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Consultas históricas: gastos y ventas por mes, año, total o rango
+
+Bug de fondo encontrado en vivo: "qué gastos tenemos este mes" en
+realidad no filtraba por mes — `consultar_gastos` traía los últimos N
+gastos sin ningún filtro de fecha (funcionaba de casualidad porque
+todos los datos de prueba eran del mismo día). Y "pero en total cuánto
+llevo vendido" cayó en `no_entendido`: `consultar_ventas` solo sabe
+responder hoy/esta semana, sin noción de "total" ni de ningún otro
+período. El usuario lo resumió directo: "hay que considerar que sea
+capaz de responder por año, rango, mes, etc."
+
+Se agregó `core.dates.resolve_period_range`, compartida por
+`consultar_gastos` (ahora acepta `period`/`date_from`/`date_to`,
+retrocompatible) y por un intent nuevo, `consultar_ventas_periodo`
+(cualquier período distinto a hoy/esta semana — mes, año, total,
+rango). Los períodos con nombre ("mes", "año", "total") se calculan
+enteramente en el servidor, nunca por el modelo; para un rango
+explícito ("gastos de agosto") el modelo sí necesita saber la fecha de
+hoy, así que ahora se le da como contexto de sistema (igual que ya se
+le daba el catálogo). Ver ADR-022 (`docs/DECISIONS.md`).
+
 ### "responder" no cubría respuestas negativas ("no hay otro", "no aplica")
 
 Bug encontrado en vivo: con un solo gasto registrado, "hay otro gasto \

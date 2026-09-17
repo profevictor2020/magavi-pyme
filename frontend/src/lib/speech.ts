@@ -5,7 +5,7 @@
 // audio al servidor del fabricante para transcribirlo. Es una excepción
 // documentada y acotada, igual que DeepSeek en ADR-010: no reemplaza el
 // plan de un motor de voz autoalojado (Whisper) para producción real.
-import { expenseCategoryLabel, formatCLPSpoken, formatQuantity } from './format'
+import { expenseCategoryLabel, formatCLPSpoken, formatQuantity, periodLabel } from './format'
 import {
   isExpense,
   isExpenseList,
@@ -16,6 +16,7 @@ import {
   isProductList,
   isProductSalesSummary,
   isReceipt,
+  isSalesPeriodTotal,
   isTopSellingList,
 } from './resultShapes'
 
@@ -193,6 +194,11 @@ export function describeResultForSpeech(result: unknown): string {
 
   if (isPeriodSummary(result)) {
     return `Hoy vendiste ${formatCLPSpoken(result.today.total)} en ${result.today.count} ventas.`
+  }
+
+  if (isSalesPeriodTotal(result)) {
+    const etiqueta = periodLabel(result.period, result.date_from, result.date_to)
+    return `${etiqueta}: has vendido ${formatCLPSpoken(result.total)} en ${result.count} ventas.`
   }
 
   if (isProduct(result)) {

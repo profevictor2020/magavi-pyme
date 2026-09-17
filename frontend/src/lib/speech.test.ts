@@ -226,6 +226,31 @@ describe('describeResultForSpeech', () => {
     expect(text).toBe('Tienes 2 gastos registrados, por 180000 pesos en total.')
   })
 
+  it('describe el total vendido en un período con nombre (consultar_ventas_periodo)', () => {
+    // Ver docs/DECISIONS.md ADR-022: a diferencia de isPeriodSummary
+    // (siempre hoy/semana), esta forma cubre cualquier período.
+    const text = describeResultForSpeech({
+      period: 'total',
+      date_from: null,
+      date_to: null,
+      total: '45000.00',
+      count: 8,
+    })
+    expect(text).toBe('En total: has vendido 45000 pesos en 8 ventas.')
+  })
+
+  it('describe el total vendido en un rango de fechas explícito', () => {
+    const text = describeResultForSpeech({
+      period: 'total',
+      date_from: '2025-08-01',
+      date_to: '2025-08-31',
+      total: '10000.00',
+      count: 2,
+    })
+    expect(text).toContain('Del 2025-08-01 al 2025-08-31')
+    expect(text).toContain('10000 pesos')
+  })
+
   it('devuelve cadena vacía para formas desconocidas', () => {
     expect(describeResultForSpeech({ foo: 'bar' })).toBe('')
   })

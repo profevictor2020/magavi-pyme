@@ -47,6 +47,31 @@ export function formatDateTime(iso: string): string {
   }
 }
 
+const PERIOD_LABELS: Record<string, string> = {
+  hoy: 'Hoy',
+  semana: 'Esta semana',
+  mes: 'Este mes',
+  anio: 'Este año',
+  total: 'En total',
+}
+
+/** Describe el período de consultar_ventas_periodo/consultar_gastos
+ * (ver docs/DECISIONS.md ADR-022) para mostrar/hablar el resultado. Un
+ * rango explícito (date_from/date_to, "AAAA-MM-DD") tiene prioridad
+ * sobre `period` — se muestra tal cual (sin reformatear a DD/MM) para
+ * no arriesgar un corrimiento de día por zona horaria al parsear la
+ * fecha. */
+export function periodLabel(
+  period: string,
+  dateFrom?: string | null,
+  dateTo?: string | null,
+): string {
+  if (dateFrom && dateTo) return `Del ${dateFrom} al ${dateTo}`
+  if (dateFrom) return `Desde el ${dateFrom}`
+  if (dateTo) return `Hasta el ${dateTo}`
+  return PERIOD_LABELS[period] ?? period
+}
+
 const INTENT_LABELS: Record<string, string> = {
   crear_venta: 'Registrar venta',
   registrar_compra: 'Registrar compra',
@@ -57,6 +82,7 @@ const INTENT_LABELS: Record<string, string> = {
   actualizar_gasto: 'Corregir gasto',
   consultar_gastos: 'Consultar gastos',
   consultar_ventas: 'Consultar ventas',
+  consultar_ventas_periodo: 'Consultar ventas de un período',
   consultar_ventas_producto: 'Consultar ventas de un producto',
   consultar_productos_mas_vendidos: 'Consultar productos más vendidos',
   consultar_stock_bajo: 'Consultar stock bajo',

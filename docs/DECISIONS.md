@@ -1066,3 +1066,82 @@ usando datos reales, eso es responder" — y se reforzó la regla de
 para cuando el modelo ya tiene la respuesta (incluida una respuesta
 "no"). Sin cambios de código ni de la API — puramente una aclaración
 del prompt.
+
+---
+
+## ADR-022 — Consultas históricas por período (mes/año/total/rango)
+
+**Contexto:** probando en vivo, el usuario notó que "qué gastos
+tenemos este mes" en realidad no filtraba por mes — `consultar_gastos`
+solo traía los últimos N gastos manuales, sin ningún filtro de fecha
+(funcionaba "por casualidad" mientras todos los gastos de prueba eran
+del mismo día). Y "pero en total cuánto llevo vendido" cayó en
+`no_entendido`: `consultar_ventas` solo sabe responder hoy/esta
+semana, no tiene noción de "total" ni de ningún otro período. El
+usuario lo resumió directo: "hay que considerar que sea capaz de
+responder por año, rango, mes, etc." — un problema de fondo (falta de
+soporte histórico), no un intent puntual que faltara.
+
+**Decisión:** se agrega `core.dates.resolve_period_range(period,
+date_from, date_to)`, una sola función que resuelve cualquier consulta
+histórica a un rango `(inicio, fin)` en hora local:
+- `period` con nombre — "hoy"/"semana"/"mes"/"anio"/"total" — se \
+  calcula ENTERAMENTE en el servidor (mismo principio que
+  `today_and_week_start` ya usaba para "hoy"/"semana"): el modelo no
+  necesita saber la fecha de hoy para pedir "este mes" o "este año",
+  solo manda el nombre del período.
+- `date_from`/`date_to` (fechas explícitas AAAA-MM-DD) cubren
+  cualquier otro caso — "gastos de agosto", "ventas del 1 al 15" — y
+  tienen prioridad sobre `period` si se dan ambos. Para que el modelo
+  pueda calcular estas fechas (necesita saber a qué año se refiere
+  "agosto"), se agrega `_construir_contexto_fecha()`: un mensaje de
+  sistema más con la fecha/hora actual, mismo mecanismo de grounding
+  que ya existía para el catálogo — nunca se le pide al modelo que
+  adivine la fecha de hoy.
+- Sin `period` ni fechas, el comportamiento no cambia respecto a antes
+  de esta ADR: `consultar_gastos` sigue sin filtrar por fecha (trae el
+  histórico reciente), y se agrega `consultar_ventas_periodo` — un
+  intent NUEVO, separado de `consultar_ventas` — que sin argumentos
+  equivale a `period="total"` (todo el histórico de ventas).
+
+`consultar_ventas_periodo` es un intent aparte en vez de agregarle
+parámetros a `consultar_ventas` porque `consultar_ventas` tiene otros
+consumidores (`GET /api/sales/summary/`, `cashbox.obtener_resumen`)
+que dependen de su forma fija `{today, week}` — cambiarla habría sido
+un cambio incompatible sin necesidad. Mismo patrón ya usado para
+`consultar_ventas_producto` (Fase 8) cuando `consultar_ventas` no
+alcanzaba para un caso distinto.
+
+**Por qué el modelo no calcula "este mes" por su cuenta:** aunque
+ahora tiene la fecha de hoy en contexto, `period="mes"`/"anio"/"semana"
+siguen resolviéndose en el servidor, no calculando `date_from`/
+`date_to` a mano — menos superficie de error (el modelo podría
+calcular mal el primer día del mes, o el año en un cambio de año) y
+menos tokens que gastar en la explicación. La fecha de hoy en contexto
+solo es necesaria para el caso que de verdad no tiene un atajo con
+nombre: un mes o rango específico que no es "este".
+
+**Alternativas consideradas:**
+- *Cambiar la forma de retorno de `consultar_gastos` a un objeto
+  `{period, expenses, total}` en vez de mantenerla como lista:* se
+  descartó — habría roto `isExpenseList`/`ResultView`/`speech.ts` sin
+  necesidad real (el total ya se calcula solo en el frontend a partir
+  de la lista, ver `describeResultForSpeech`); mejor mantener la forma
+  de salida estable y agregar el filtrado como parámetros de entrada.
+- *Que el modelo calcule siempre `date_from`/`date_to`, sin `period`
+  con nombre:* descartado — obliga al modelo a hacer aritmética de
+  fechas para el caso más común ("este mes", "este año"), con más
+  superficie de error que decirle el nombre del período y dejar que el
+  servidor lo resuelva.
+
+**Consecuencias:** `consultar_gastos` ahora acepta `period`/
+`date_from`/`date_to` (todos opcionales, retrocompatible); su `limit`
+por defecto subió de 50 a 200 porque ya no hay que confiar en "los
+últimos 50" para cubrir accidentalmente un período. Nuevo intent
+`consultar_ventas_periodo` y nueva forma de resultado
+`SalesPeriodTotalLike` en el frontend (`isSalesPeriodTotal`,
+`periodLabel`). Todo mensaje al LLM ahora incluye la fecha/hora actual
+como contexto de sistema adicional — mismo principio de grounding que
+ya se aplicaba al catálogo, vocabulario y gastos recientes, nunca
+concatenado al mensaje del usuario (no cambia la defensa de
+docs/SECURITY.md #5).

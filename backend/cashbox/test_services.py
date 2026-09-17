@@ -1,3 +1,4 @@
+import datetime
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -338,3 +339,69 @@ class ConsultarGastosTests(TestCase):
         )
 
         self.assertEqual(consultar_gastos(company=self.company), [])
+
+    def _gasto_en_fecha(self, created_at, amount=Decimal("1000")):
+        # registrar_gasto siempre usa "ahora" (auto_now_add); para probar
+        # filtrado por período hay que retrasar el gasto después de
+        # creado (ver el mismo patrón en ObtenerResumenTests arriba).
+        gasto = registrar_gasto(
+            company=self.company, user=self.user, amount=amount, category="otro", description="x"
+        )
+        CashMovement.objects.filter(pk=gasto.id).update(created_at=created_at)
+        return gasto
+
+    def test_period_mes_excluye_gastos_de_meses_anteriores(self):
+        # Bug real reportado en vivo: "qué gastos llevamos este mes" no
+        # filtraba de verdad por mes, solo mostraba los últimos N gastos
+        # sin importar cuándo fueron — funcionaba por casualidad mientras
+        # todos los datos de prueba eran del mismo día (ver ADR-022).
+        mes_pasado = timezone.localtime().replace(day=1) - timezone.timedelta(days=1)
+        gasto_viejo = self._gasto_en_fecha(mes_pasado)
+        gasto_de_este_mes = registrar_gasto(
+            company=self.company,
+            user=self.user,
+            amount=Decimal("2000"),
+            category="otro",
+            description="y",
+        )
+
+        resultado = consultar_gastos(company=self.company, period="mes")
+
+        ids = [g["id"] for g in resultado]
+        self.assertIn(gasto_de_este_mes.id, ids)
+        self.assertNotIn(gasto_viejo.id, ids)
+
+    def test_period_total_incluye_todo_el_historico(self):
+        hace_un_anio = timezone.localtime() - timezone.timedelta(days=400)
+        gasto_viejo = self._gasto_en_fecha(hace_un_anio)
+
+        resultado = consultar_gastos(company=self.company, period="total")
+
+        self.assertIn(gasto_viejo.id, [g["id"] for g in resultado])
+
+    def test_rango_de_fechas_explicito(self):
+        dentro_del_rango = self._gasto_en_fecha(
+            timezone.localtime().replace(year=2025, month=8, day=10)
+        )
+        fuera_del_rango = self._gasto_en_fecha(
+            timezone.localtime().replace(year=2025, month=9, day=1)
+        )
+
+        resultado = consultar_gastos(
+            company=self.company,
+            date_from=datetime.date(2025, 8, 1),
+            date_to=datetime.date(2025, 8, 31),
+        )
+
+        ids = [g["id"] for g in resultado]
+        self.assertIn(dentro_del_rango.id, ids)
+        self.assertNotIn(fuera_del_rango.id, ids)
+
+    def test_sin_period_ni_fechas_no_filtra_como_antes(self):
+        # Comportamiento previo a ADR-022 preservado: sin period/fechas,
+        # consultar_gastos no filtra por fecha.
+        viejo = self._gasto_en_fecha(timezone.localtime() - timezone.timedelta(days=400))
+
+        resultado = consultar_gastos(company=self.company)
+
+        self.assertIn(viejo.id, [g["id"] for g in resultado])

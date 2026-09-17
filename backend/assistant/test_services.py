@@ -166,6 +166,53 @@ class ProponerIntentTests(TestCase):
                 raw_parameters={"product_id": foreign_product.id},
             )
 
+    def test_consultar_ventas_periodo_executes_immediately(self):
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="consultar_ventas_periodo",
+            raw_parameters={},
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"]["period"], "total")
+        self.assertEqual(resultado["result"]["count"], 0)
+
+    def test_consultar_ventas_periodo_acepta_period_con_nombre(self):
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="consultar_ventas_periodo",
+            raw_parameters={"period": "mes"},
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"]["period"], "mes")
+
+    def test_consultar_ventas_periodo_rechaza_period_invalido(self):
+        with self.assertRaises(DRFValidationError):
+            proponer_intent(
+                company=self.company,
+                user=self.user,
+                intent_name="consultar_ventas_periodo",
+                raw_parameters={"period": "no_existe"},
+            )
+
+    def test_consultar_gastos_acepta_period(self):
+        # Bug real (ver docs/DECISIONS.md ADR-022): antes consultar_gastos
+        # no filtraba por fecha en absoluto, así que "este mes" no era
+        # realmente "este mes" — funcionaba por casualidad con datos de
+        # prueba todos del mismo día.
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="consultar_gastos",
+            raw_parameters={"period": "mes"},
+        )
+
+        self.assertEqual(resultado["status"], "executed")
+        self.assertEqual(resultado["result"], [])
+
     def test_consultar_productos_mas_vendidos_executes_immediately(self):
         resultado = proponer_intent(
             company=self.company,

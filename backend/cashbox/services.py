@@ -6,7 +6,7 @@ from django.db.models import Sum
 
 from audit.services import audit_source_for_origen, registrar_auditoria
 from catalog.services import consultar_stock_bajo
-from core.dates import today_and_week_start
+from core.dates import resolve_period_range, today_and_week_start
 from sales.services import consultar_ventas
 
 from .models import CashMovement
@@ -134,21 +134,33 @@ def actualizar_gasto(
     return cash_movement
 
 
-def consultar_gastos(*, company, limit=50):
+def consultar_gastos(*, company, period=None, date_from=None, date_to=None, limit=200):
     """Tool Layer de solo lectura: egresos manuales registrados (ver
     registrar_gasto), más recientes primero — "¿qué gastos llevamos?",
     "muéstrame los gastos". No incluye compras de inventario a
     proveedores (eso es otro concepto, con su propio registro en
     Purchase) ni ingresos de ventas.
+
+    Sin period ni date_from/date_to, no filtra por fecha (todo el
+    histórico manual, hasta `limit`) — igual que antes de ADR-022. Con
+    period ("hoy"/"semana"/"mes"/"anio"/"total") o un rango explícito
+    (date_from/date_to), acota a ese período — ver
+    core.dates.resolve_period_range. `limit` subió de 50 a 200 al
+    agregar filtrado por fecha: antes ser "los últimos 50" alcanzaba
+    para cubrir "este mes" por accidente (pocos gastos manuales en la
+    práctica); ahora que el período es explícito, no hay que confiar en
+    ese accidente.
     """
-    movimientos = (
-        CashMovement.objects.for_company(company)
-        .filter(
-            type=CashMovement.MovementType.EXPENSE,
-            reference_type=CashMovement.ReferenceType.MANUAL,
-        )
-        .order_by("-created_at")[:limit]
+    inicio, fin = resolve_period_range(period, date_from, date_to)
+    queryset = CashMovement.objects.for_company(company).filter(
+        type=CashMovement.MovementType.EXPENSE,
+        reference_type=CashMovement.ReferenceType.MANUAL,
     )
+    if inicio is not None:
+        queryset = queryset.filter(created_at__gte=inicio)
+    if fin is not None:
+        queryset = queryset.filter(created_at__lt=fin)
+    movimientos = queryset.order_by("-created_at")[:limit]
     return [
         {
             "id": m.id,

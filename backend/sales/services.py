@@ -6,7 +6,7 @@ from django.db.models import Count, Sum
 
 from audit.services import audit_source_for_origen, registrar_auditoria
 from cashbox.models import CashMovement
-from core.dates import today_and_week_start
+from core.dates import resolve_period_range, today_and_week_start
 from inventory.services import ajustar_inventario
 
 from .models import Sale, SaleItem
@@ -114,6 +114,33 @@ def consultar_ventas(*, company):
         }
 
     return {"today": summarize(today_start), "week": summarize(week_start)}
+
+
+def consultar_ventas_periodo(*, company, period=None, date_from=None, date_to=None):
+    """Tool Layer de solo lectura: total vendido en un período histórico
+    arbitrario — mes, año, TODO el histórico, o un rango de fechas
+    explícito (ver docs/DECISIONS.md ADR-022). A diferencia de
+    consultar_ventas (siempre hoy/esta semana, para "¿cómo va el
+    negocio?"), esta cubre preguntas históricas: "¿cuánto llevo vendido
+    en total?", "¿cuánto vendí este año?", "ventas de agosto".
+
+    Sin period ni date_from/date_to, equivale a period="total": todo el
+    histórico de ventas confirmadas, sin filtrar por fecha.
+    """
+    inicio, fin = resolve_period_range(period, date_from, date_to)
+    base = Sale.objects.for_company(company).filter(status=Sale.Status.CONFIRMED)
+    if inicio is not None:
+        base = base.filter(sold_at__gte=inicio)
+    if fin is not None:
+        base = base.filter(sold_at__lt=fin)
+    aggregate = base.aggregate(total=Sum("total"), count=Count("id"))
+    return {
+        "period": period or "total",
+        "date_from": date_from.isoformat() if date_from else None,
+        "date_to": date_to.isoformat() if date_to else None,
+        "total": str(aggregate["total"] or Decimal("0.00")),
+        "count": aggregate["count"] or 0,
+    }
 
 
 def consultar_ventas_producto(*, company, product):
