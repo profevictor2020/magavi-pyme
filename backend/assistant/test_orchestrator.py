@@ -41,6 +41,17 @@ class ConstruirContextoCatalogoTests(TestCase):
 
         self.assertIn("stock actual: 10", contexto)
 
+    def test_incluye_minimo_de_stock_bajo_actual(self):
+        # Ver docs/DECISIONS.md ADR-025: sin esto, el modelo no puede
+        # calcular un cambio relativo ("sube el mínimo de X en 2") al
+        # umbral de stock bajo, igual que ya pasaba con el precio.
+        company = CompanyFactory()
+        ProductFactory(company=company, name="Regla", low_stock_threshold=Decimal("5"))
+
+        contexto = _construir_contexto_catalogo(company)
+
+        self.assertIn("mínimo de stock bajo actual: 5", contexto)
+
     def test_stock_de_producto_por_unidad_no_muestra_decimales_espurios(self):
         # Bug real (ver docs/DECISIONS.md ADR-024): el campo se guarda
         # con 3 decimales, así que sin formatear se leía "10.000" — el
@@ -211,6 +222,32 @@ class InterpretarYProponerTests(TestCase):
         # La propuesta no ejecuta nada todavía — el precio real no cambia
         # hasta que se confirme (ver assistant/test_services.py).
         self.assertNotEqual(self.product.default_price, Decimal("890.00"))
+
+    def test_pedido_de_aviso_de_reposicion_se_traduce_a_low_stock_threshold(self):
+        # Bug real (ver docs/DECISIONS.md ADR-025): "hazme un recuerdo
+        # cuando lleguen a 5 de que tengo que reponer reglas" cayó en
+        # no_entendido, diciendo que no existe una acción para
+        # recordatorios — pero low_stock_threshold ES esa acción en este
+        # sistema (consultar_stock_bajo la usa para avisar).
+        llm = FakeLLMProvider(
+            [
+                _json(
+                    "actualizar_producto",
+                    {"product_id": self.product.id, "low_stock_threshold": "5"},
+                )
+            ]
+        )
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="avísame cuando el stock de la goma llegue a 5",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "pending_confirmation")
+        self.assertEqual(resultado["intent"], "actualizar_producto")
+        self.assertEqual(resultado["parameters"]["low_stock_threshold"], "5")
 
     def test_mensaje_de_gasto_crea_propuesta_pendiente(self):
         llm = FakeLLMProvider(

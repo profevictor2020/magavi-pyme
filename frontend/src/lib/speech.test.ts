@@ -175,6 +175,33 @@ describe('describeResultForSpeech', () => {
     expect(text).toContain('pesos')
   })
 
+  it('menciona el aviso de stock bajo cuando el producto tiene un mínimo configurado', () => {
+    // Bug real (ver docs/DECISIONS.md ADR-025): "avísame cuando el stock
+    // de X llegue a N" se traduce a low_stock_threshold=N, pero antes no
+    // se confirmaba en ningún lado qué valor quedó configurado.
+    const text = describeResultForSpeech({
+      id: 1,
+      name: 'Regla',
+      unit: 'unidad',
+      current_stock: '18',
+      low_stock_threshold: '5',
+      default_price: '700',
+    })
+    expect(text).toContain('Aviso de stock bajo desde 5')
+  })
+
+  it('no menciona el aviso de stock bajo cuando no está configurado', () => {
+    const text = describeResultForSpeech({
+      id: 1,
+      name: 'Regla',
+      unit: 'unidad',
+      current_stock: '18',
+      low_stock_threshold: '0',
+      default_price: '700',
+    })
+    expect(text).not.toContain('Aviso de stock bajo')
+  })
+
   it('describe una alerta de stock bajo de un solo producto', () => {
     const text = describeResultForSpeech([
       { id: 1, name: 'Lápices de colores', current_stock: '2', low_stock_threshold: '10' },

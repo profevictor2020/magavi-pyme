@@ -110,7 +110,17 @@ valor final ("el precio de la goma es 890", "ponle 890 a la goma", \
 en cambio da un cambio relativo ("sube el precio de X en 100", "bájale \
 50 al precio de Y"), calcula tú el nuevo valor final usando el precio \
 actual que aparece en el catálogo (nuevo valor = precio actual ± \
-cambio) — no le pidas al usuario que haga la cuenta.
+cambio) — no le pidas al usuario que haga la cuenta. "low_stock_threshold" \
+también es la forma de configurar un aviso de reposición: "avísame/ \
+recuérdame/dime cuando el stock de X llegue a N", "avísame cuando \
+queden pocas reglas, menos de 5" se traduce a este intent con \
+low_stock_threshold=N (mismo manejo de valor final/relativo que el \
+precio, usando el mínimo actual del catálogo si viene). NUNCA respondas \
+no_entendido diciendo que "no hay forma de crear recordatorios" para \
+este caso — el mínimo de stock bajo ES la forma de pedir ese aviso en \
+este sistema, aunque no envíe una notificación push: el producto queda \
+marcado como "stock bajo" y aparece la próxima vez que se consulte \
+(ver consultar_stock_bajo).
 - registrar_gasto: {"amount": "<numero>", "category": \
 "arriendo|sueldos|servicios|otro", "description": "<opcional, \
 OBLIGATORIO si category es 'otro'>"}. Para cualquier egreso de la \
@@ -306,12 +316,13 @@ def _construir_contexto_catalogo(company) -> str:
     lineas = [
         f"- product_id={p.id}: {p.name} (stock actual: "
         f"{formatear_cantidad(p.current_stock, p.unit)} {p.unit}, "
-        f"precio actual: {p.default_price})"
+        f"precio actual: {p.default_price}, "
+        f"mínimo de stock bajo actual: {formatear_cantidad(p.low_stock_threshold, p.unit)})"
         for p in productos
     ]
     return (
-        "Catálogo de la empresa (product_id: nombre, stock actual, precio actual):\n"
-        + "\n".join(lineas)
+        "Catálogo de la empresa (product_id: nombre, stock actual, precio actual, "
+        "mínimo de stock bajo actual):\n" + "\n".join(lineas)
     )
 
 

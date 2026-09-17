@@ -54,6 +54,7 @@ export interface ProductLike {
   unit: string
   default_price: string
   current_stock: string
+  low_stock_threshold?: string
 }
 
 export interface TopSellingProductLike {

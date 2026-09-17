@@ -109,6 +109,11 @@ export function ResultView({ result }: { result: unknown }) {
         <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
           Stock: {formatQuantity(result.current_stock)} {result.unit}
         </div>
+        {result.low_stock_threshold !== undefined && Number(result.low_stock_threshold) > 0 && (
+          <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+            Aviso de stock bajo desde: {formatQuantity(result.low_stock_threshold)} {result.unit}
+          </div>
+        )}
       </div>
     )
   }

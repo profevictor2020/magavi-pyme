@@ -204,9 +204,13 @@ export function describeResultForSpeech(result: unknown): string {
   if (isProduct(result)) {
     // Misma forma para crear_producto y actualizar_producto (ver
     // ResultView) — frase neutra, no dice "creado" ni "actualizado".
+    const umbral =
+      result.low_stock_threshold !== undefined && Number(result.low_stock_threshold) > 0
+        ? ` Aviso de stock bajo desde ${formatQuantity(result.low_stock_threshold)}.`
+        : ''
     return (
       `${result.name}: precio ${formatCLPSpoken(result.default_price)}, ` +
-      `stock ${formatQuantity(result.current_stock)}.`
+      `stock ${formatQuantity(result.current_stock)}.${umbral}`
     )
   }
 

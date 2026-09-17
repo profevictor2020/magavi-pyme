@@ -5,6 +5,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### "Avísame cuando el stock llegue a X" caía en no_entendido
+
+Bug encontrado en vivo: "hazme un recuerdo cuando lleguen a 5 de que
+tengo que reponer reglas" cayó en `no_entendido`, diciendo que "no hay
+una acción para crear recordatorios". Pero el sistema ya tenía
+exactamente esa capacidad — el mínimo de stock bajo de un producto
+(editable con `actualizar_producto`, consultable con
+`consultar_stock_bajo`) — el `SYSTEM_PROMPT` simplemente no enseñaba a
+reconocer esa frase como ese campo.
+
+Se amplió la descripción de `actualizar_producto` con el mapeo
+explícito ("avísame/recuérdame cuando el stock de X llegue a N" →
+`low_stock_threshold=N`), se agregó el mínimo actual al contexto del
+catálogo (para que un cambio relativo también funcione, igual que ya
+pasaba con el precio), y se aclaró que esto no envía una notificación
+proactiva — el producto queda marcado como "stock bajo" para la
+próxima consulta. También se agregó el umbral configurado a la
+confirmación visual del producto (antes no se mostraba en ningún
+lado, aunque el backend ya lo devolvía). Ver ADR-025
+(`docs/DECISIONS.md`).
+
 ### Las cantidades por unidad se mostraban con decimales espurios en el chat
 
 Bug encontrado en vivo, probando el nuevo intent "asesoria": la

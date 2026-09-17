@@ -1288,3 +1288,56 @@ de base de datos, de la API pública del asistente, ni del frontend —
 `formatQuantity` ya hacía lo correcto para las formas estructuradas
 que muestra en pantalla; el fix es enteramente del lado del contexto
 que arma el backend para el LLM.
+
+---
+
+## ADR-025 — "Avísame cuando..." se traduce al mínimo de stock bajo existente
+
+**Contexto:** probando en vivo, "hazme un recuerdo cuando lleguen a 5
+de que tengo que comprar reponer reglas" cayó en `no_entendido`,
+explicando que "el sistema no tiene una acción para crear
+recordatorios o alertas personalizadas". Es cierto que no existe un
+sistema de notificaciones push — pero el sistema SÍ tiene exactamente
+el mecanismo que el usuario pedía: `Product.low_stock_threshold`, ya
+editable vía `actualizar_producto`, y `consultar_stock_bajo`, que lista
+los productos en o bajo ese mínimo. El modelo no hizo la conexión
+porque el `SYSTEM_PROMPT` solo describía `low_stock_threshold` como
+"mínimo de stock bajo" en abstracto, sin ningún ejemplo que lo
+relacionara con el lenguaje natural de "avisar"/"recordar" cuando el
+stock baja — el mismo patrón de gap ya visto en ADR-021/ADR-023: la
+capacidad existe, pero el prompt no le enseña al modelo a reconocerla
+en esa frase concreta.
+
+**Decisión:** se amplía la descripción de `actualizar_producto` en el
+`SYSTEM_PROMPT` con el mapeo explícito: "avísame/recuérdame/dime
+cuando el stock de X llegue a N" → `actualizar_producto` con
+`low_stock_threshold=N` (mismo manejo de valor final/relativo que ya
+tenía el precio), y una instrucción explícita de NO usar `no_entendido`
+para este caso diciendo que "no hay forma de crear recordatorios" — el
+mínimo de stock bajo ES esa forma en este sistema, aunque no envíe una
+notificación proactiva (el producto se marca "stock bajo" y aparece la
+próxima vez que se consulta, no al momento). Se agrega también
+`mínimo de stock bajo actual` a `_construir_contexto_catalogo` (mismo
+grounding que ya tenía el precio) para que un cambio relativo ("sube
+el mínimo de X en 2") también funcione. Por último, se agrega
+`low_stock_threshold` a la forma `ProductLike` del frontend
+(`ResultView`/`describeResultForSpeech`, mostrado solo si es mayor a
+0): antes de esto, aunque el backend ya devolvía el campo completo
+(`ProductSerializer` lo incluye desde siempre), la confirmación visual
+después de "avísame cuando..." no mostraba qué umbral quedó
+configurado — el usuario no tenía forma de verificar que su pedido se
+haya interpretado bien.
+
+**Por qué no crear un intent nuevo tipo "crear_recordatorio":**
+hubiera sido una funcionalidad completamente nueva (persistencia de
+recordatorios, quizás notificaciones) para resolver algo que el
+sistema ya resuelve con el dato que tiene — habría sido trabajo
+redundante y una superficie más para mantener, cuando el gap real era
+solo de reconocimiento del lenguaje.
+
+**Consecuencias:** ningún cambio de base de datos ni de la API del
+Tool Layer — el campo, el intent y el endpoint ya existían. Cambios
+puramente de prompt (nuevo ejemplo + contexto de catálogo ampliado) y
+de presentación en el frontend (mostrar un campo que el backend ya
+devolvía). Sigue siendo honesto sobre la limitación real: no hay
+notificación proactiva, solo un estado consultable.
