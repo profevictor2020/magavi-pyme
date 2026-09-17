@@ -3,8 +3,10 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from accounts.factories import UserFactory
+from cashbox.models import CashMovement
 from catalog.factories import ProductFactory
 from companies.factories import CompanyFactory
 from inventory.models import InventoryMovement
@@ -37,6 +39,30 @@ class ProponerIntentTests(TestCase):
         self.assertEqual(pending.status, PendingAction.Status.PENDING)
         self.assertEqual(pending.intent_name, "crear_venta")
         self.assertEqual(Sale.objects.for_company(self.company).count(), 0)
+
+    def test_registrar_gasto_creates_pending_action_without_executing(self):
+        resultado = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="registrar_gasto",
+            raw_parameters={"amount": "20000", "category": "servicios"},
+        )
+
+        self.assertEqual(resultado["status"], "pending_confirmation")
+        self.assertEqual(CashMovement.objects.for_company(self.company).count(), 0)
+
+    def test_registrar_gasto_otro_sin_descripcion_es_rechazado(self):
+        # Falla en la validación del serializer del intent (antes de crear
+        # la PendingAction), que lanza el ValidationError de DRF — no el
+        # de Django que lanza el Tool Layer si se lo llama directo (ver
+        # cashbox/test_services.py::RegistrarGastoTests).
+        with self.assertRaises(DRFValidationError):
+            proponer_intent(
+                company=self.company,
+                user=self.user,
+                intent_name="registrar_gasto",
+                raw_parameters={"amount": "5000", "category": "otro"},
+            )
 
     def test_readonly_intent_executes_immediately(self):
         resultado = proponer_intent(
@@ -215,6 +241,21 @@ class ConfirmarIntentTests(TestCase):
 
         self.assertEqual(product.default_price, Decimal("890.00"))
         self.assertEqual(product.current_stock, Decimal("10.000"))
+
+    def test_confirm_registrar_gasto_creates_the_expense(self):
+        propuesta = proponer_intent(
+            company=self.company,
+            user=self.user,
+            intent_name="registrar_gasto",
+            raw_parameters={"amount": "150000", "category": "arriendo"},
+        )
+
+        movement = confirmar_intent(
+            company=self.company, user=self.user, pending_action_id=propuesta["pending_action_id"]
+        )
+
+        self.assertEqual(movement.amount, Decimal("150000.00"))
+        self.assertEqual(movement.category, "arriendo")
 
     def test_double_confirm_is_rejected_and_does_not_duplicate(self):
         propuesta = self._proponer_venta()

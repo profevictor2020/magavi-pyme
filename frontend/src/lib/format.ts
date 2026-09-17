@@ -53,6 +53,7 @@ const INTENT_LABELS: Record<string, string> = {
   ajustar_inventario: 'Ajustar inventario',
   crear_producto: 'Crear producto',
   actualizar_producto: 'Actualizar producto',
+  registrar_gasto: 'Registrar gasto',
   consultar_ventas: 'Consultar ventas',
   consultar_ventas_producto: 'Consultar ventas de un producto',
   consultar_productos_mas_vendidos: 'Consultar productos más vendidos',
@@ -80,8 +81,23 @@ const PARAM_LABELS: Record<string, string> = {
   default_cost: 'Costo',
   initial_stock: 'Stock inicial',
   low_stock_threshold: 'Mínimo de stock',
+  amount: 'Monto',
+  category: 'Categoría',
+  description: 'Descripción',
 }
 
 export function paramLabel(key: string): string {
   return PARAM_LABELS[key] ?? key
+}
+
+const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
+  arriendo: 'Arriendo',
+  sueldos: 'Sueldos',
+  servicios: 'Servicios',
+  otro: 'Otro',
+}
+
+export function expenseCategoryLabel(category: string | null | undefined): string {
+  if (!category) return '—'
+  return EXPENSE_CATEGORY_LABELS[category] ?? category
 }

@@ -17,6 +17,7 @@ misma confirmación explícita de la Fase 7, sin excepción.
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
+from cashbox.models import CashMovement
 from catalog.models import Product
 from core.json_utils import parse_json_object
 
@@ -65,6 +66,22 @@ en cambio da un cambio relativo ("sube el precio de X en 100", "bájale \
 50 al precio de Y"), calcula tú el nuevo valor final usando el precio \
 actual que aparece en el catálogo (nuevo valor = precio actual ± \
 cambio) — no le pidas al usuario que haga la cuenta.
+- registrar_gasto: {"amount": "<numero>", "category": \
+"arriendo|sueldos|servicios|otro", "description": "<opcional, \
+OBLIGATORIO si category es 'otro'>"}. Para cualquier egreso de la \
+empresa que NO sea comprar mercadería/inventario a un proveedor (eso es \
+siempre registrar_compra) — ej. "pagué el arriendo", "pagué las \
+remuneraciones/sueldos", "pagué la cuenta de luz/agua/internet", \
+"compré bencina para el auto de reparto". Usa "arriendo" para arriendo \
+o renta del local; "sueldos" para remuneraciones o pagos a \
+trabajadores; "servicios" para cuentas de luz, agua, gas, internet, \
+teléfono; y "otro" para cualquier gasto que no encaje en esas tres — en \
+ese caso SIEMPRE incluye una "description" breve y clara de qué es, \
+nunca la dejes vacía. Si el gasto se parece a uno de los gastos "otro" \
+que esta empresa ya registró antes (ver el contexto de vocabulario más \
+abajo, si viene), usa la MISMA descripción que usó antes en vez de \
+inventar una redacción nueva — así sabes que es el mismo tipo de gasto \
+recurrente.
 - consultar_ventas: {} (total vendido HOY y esta semana, sumando TODOS \
 los productos — ej. "¿cuánto vendí hoy?", "¿cómo van las ventas de la \
 semana?". También úsalo para preguntas generales y coloquiales sobre \
@@ -153,6 +170,42 @@ def _construir_contexto_vocabulario(company) -> str:
         "Vocabulario propio de esta empresa (frases que este usuario ya usó antes "
         "y qué acción terminaron significando — interpreta frases parecidas de la "
         "misma forma, sin volver a preguntar):\n" + "\n".join(lineas)
+    )
+
+
+def _construir_contexto_gastos_otros(company) -> str:
+    """Descripciones de gastos categoría "otro" que esta empresa ya
+    registró antes (ver docs/DECISIONS.md ADR-018) — mismo mecanismo de
+    grounding que el vocabulario de intents (LearnedPhrase), pero para
+    reconocer un gasto recurrente que no encaja en las categorías fijas
+    (arriendo/sueldos/servicios) y reutilizar la misma descripción en
+    vez de redactarla distinto cada vez.
+
+    Se deduplica en Python (no con `.distinct()` de la base de datos):
+    Postgres exige que las columnas del ORDER BY estén en el SELECT
+    cuando se usa DISTINCT, y aquí se ordena por fecha pero solo se
+    necesita la descripción.
+    """
+    recientes = (
+        CashMovement.objects.for_company(company)
+        .filter(type=CashMovement.MovementType.EXPENSE, category=CashMovement.Category.OTRO)
+        .exclude(description="")
+        .order_by("-created_at")
+        .values_list("description", flat=True)[:100]
+    )
+    vistas: list[str] = []
+    for descripcion in recientes:
+        if descripcion not in vistas:
+            vistas.append(descripcion)
+        if len(vistas) >= 20:
+            break
+    if not vistas:
+        return ""
+    lineas = "\n".join(f'- "{d}"' for d in vistas)
+    return (
+        'Gastos de categoría "otro" que esta empresa ya registró antes (si el '
+        "usuario menciona algo parecido, es el mismo gasto recurrente — usa "
+        "exactamente esta misma descripción, no la redactes de nuevo):\n" + lineas
     )
 
 
@@ -269,6 +322,9 @@ def interpretar_y_proponer(*, company, user, mensaje, conversation=None, llm_pro
     vocabulario = _construir_contexto_vocabulario(company)
     if vocabulario:
         messages.append({"role": "system", "content": vocabulario})
+    gastos_otros = _construir_contexto_gastos_otros(company)
+    if gastos_otros:
+        messages.append({"role": "system", "content": gastos_otros})
     messages.append({"role": "user", "content": mensaje})
 
     intent_dict, _raw = _pedir_intent_al_llm(llm_provider, messages)

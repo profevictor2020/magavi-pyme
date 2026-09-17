@@ -1,5 +1,6 @@
-import { formatCLP, formatQuantity } from '../lib/format'
+import { expenseCategoryLabel, formatCLP, formatQuantity } from '../lib/format'
 import {
+  isExpense,
   isLowStockList,
   isMovement,
   isPeriodSummary,
@@ -138,6 +139,21 @@ export function ResultView({ result }: { result: unknown }) {
           </li>
         ))}
       </ol>
+    )
+  }
+
+  if (isExpense(result)) {
+    return (
+      <div className="result-card">
+        <strong>
+          Gasto: {expenseCategoryLabel(result.category)} — {formatCLP(result.amount)}
+        </strong>
+        {result.description && (
+          <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+            {result.description}
+          </div>
+        )}
+      </div>
     )
   }
 

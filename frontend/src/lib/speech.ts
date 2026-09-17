@@ -5,8 +5,9 @@
 // audio al servidor del fabricante para transcribirlo. Es una excepción
 // documentada y acotada, igual que DeepSeek en ADR-010: no reemplaza el
 // plan de un motor de voz autoalojado (Whisper) para producción real.
-import { formatCLPSpoken, formatQuantity } from './format'
+import { expenseCategoryLabel, formatCLPSpoken, formatQuantity } from './format'
 import {
+  isExpense,
   isLowStockList,
   isMovement,
   isPeriodSummary,
@@ -198,6 +199,11 @@ export function describeResultForSpeech(result: unknown): string {
       `El producto que más se ha vendido es ${primero.product_name}, ` +
       `con ${formatQuantity(primero.quantity)} unidades.`
     )
+  }
+
+  if (isExpense(result)) {
+    const categoria = expenseCategoryLabel(result.category).toLowerCase()
+    return `Gasto registrado: ${categoria}, ${formatCLPSpoken(result.amount)}.`
   }
 
   return ''

@@ -1,7 +1,10 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Sum
 
+from audit.services import audit_source_for_origen, registrar_auditoria
 from catalog.services import consultar_stock_bajo
 from core.dates import today_and_week_start
 from sales.services import consultar_ventas
@@ -28,6 +31,43 @@ def _cash_period(company, since):
         "expense": str(expense),
         "balance": str(income - expense),
     }
+
+
+def registrar_gasto(*, company, user, amount, category, description="", origen="manual"):
+    """Tool Layer: único punto de escritura para egresos que NO son
+    compra de inventario (arriendo, sueldos, servicios, u otro gasto
+    puntual) — ver docs/DECISIONS.md ADR-018. A diferencia de
+    registrar_compra (purchases/services.py), no toca stock ni
+    productos: es plata que sale de la caja sin más, así que solo crea
+    el CashMovement directo.
+    """
+    amount = Decimal(amount)
+    if amount <= 0:
+        raise ValidationError("El monto del gasto debe ser mayor a cero.")
+    if category == CashMovement.Category.OTRO and not description:
+        raise ValidationError('Los gastos de categoría "otro" necesitan una descripción.')
+
+    with transaction.atomic():
+        movement = CashMovement.objects.create(
+            company=company,
+            type=CashMovement.MovementType.EXPENSE,
+            amount=amount,
+            reference_type=CashMovement.ReferenceType.MANUAL,
+            category=category,
+            description=description,
+            created_by=user,
+        )
+        registrar_auditoria(
+            company=company,
+            user=user,
+            action="cashmovement.create",
+            entity_type="CashMovement",
+            entity_id=movement.id,
+            after={"amount": str(amount), "category": category, "description": description},
+            source=audit_source_for_origen(origen),
+        )
+
+    return movement
 
 
 def obtener_resumen(*, company):

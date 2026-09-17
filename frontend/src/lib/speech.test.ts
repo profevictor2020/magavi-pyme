@@ -171,6 +171,18 @@ describe('describeResultForSpeech', () => {
     expect(describeResultForSpeech([])).toBe('No hay productos en el catálogo.')
   })
 
+  it('describe un gasto registrado con su categoría', () => {
+    const text = describeResultForSpeech({
+      id: 1,
+      type: 'expense',
+      amount: '150000.00',
+      reference_type: 'manual',
+      category: 'arriendo',
+      description: '',
+    })
+    expect(text).toBe('Gasto registrado: arriendo, 150000 pesos.')
+  })
+
   it('devuelve cadena vacía para formas desconocidas', () => {
     expect(describeResultForSpeech({ foo: 'bar' })).toBe('')
   })

@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from cashbox.models import CashMovement
 from catalog.models import Product
 from catalog.serializers import AdjustStockSerializer
 
@@ -54,6 +55,19 @@ class ActualizarProductoIntentSerializer(serializers.Serializer):
         campos_editables = ("name", "default_price", "default_cost", "low_stock_threshold")
         if not any(field in attrs for field in campos_editables):
             raise serializers.ValidationError("Debes indicar al menos un campo para actualizar.")
+        return attrs
+
+
+class RegistrarGastoIntentSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
+    category = serializers.ChoiceField(choices=CashMovement.Category.choices)
+    description = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if attrs["category"] == CashMovement.Category.OTRO and not attrs.get("description"):
+            raise serializers.ValidationError(
+                {"description": 'Los gastos de categoría "otro" necesitan una descripción.'}
+            )
         return attrs
 
 

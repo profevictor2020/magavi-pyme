@@ -12,6 +12,7 @@ objetos concretos y delega.
 from dataclasses import dataclass
 from typing import Callable
 
+from cashbox.services import registrar_gasto
 from catalog.services import (
     actualizar_producto,
     consultar_stock_bajo,
@@ -37,6 +38,7 @@ from .serializers import (
     ConsultarVentasProductoIntentSerializer,
     CrearProductoIntentSerializer,
     EmptyParamsSerializer,
+    RegistrarGastoIntentSerializer,
 )
 
 
@@ -112,6 +114,17 @@ def _ejecutar_actualizar_producto(*, company, user, params):
     )
 
 
+def _ejecutar_registrar_gasto(*, company, user, params):
+    return registrar_gasto(
+        company=company,
+        user=user,
+        amount=params["amount"],
+        category=params["category"],
+        description=params.get("description", ""),
+        origen="assistant",
+    )
+
+
 def _ejecutar_consultar_ventas(*, company, user, params):
     return consultar_ventas(company=company)
 
@@ -172,6 +185,9 @@ INTENTS: dict[str, IntentDefinition] = {
     ),
     "actualizar_producto": IntentDefinition(
         ActualizarProductoIntentSerializer, True, _ejecutar_actualizar_producto
+    ),
+    "registrar_gasto": IntentDefinition(
+        RegistrarGastoIntentSerializer, True, _ejecutar_registrar_gasto
     ),
     "consultar_ventas": IntentDefinition(EmptyParamsSerializer, False, _ejecutar_consultar_ventas),
     "consultar_ventas_producto": IntentDefinition(

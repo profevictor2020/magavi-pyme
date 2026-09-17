@@ -15,6 +15,12 @@ class CashMovement(models.Model):
         PURCHASE = "purchase", "Compra"
         MANUAL = "manual", "Manual"
 
+    class Category(models.TextChoices):
+        ARRIENDO = "arriendo", "Arriendo"
+        SUELDOS = "sueldos", "Sueldos"
+        SERVICIOS = "servicios", "Servicios"
+        OTRO = "otro", "Otro"
+
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="cash_movements")
     type = models.CharField(max_length=10, choices=MovementType.choices)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
@@ -22,6 +28,10 @@ class CashMovement(models.Model):
         max_length=10, choices=ReferenceType.choices, default=ReferenceType.MANUAL
     )
     reference_id = models.PositiveBigIntegerField(null=True, blank=True)
+    # Solo se usa para egresos manuales (registrar_gasto, ver
+    # cashbox/services.py) — una venta o compra de inventario no
+    # necesita categoría propia, ya la distingue reference_type.
+    category = models.CharField(max_length=20, choices=Category.choices, null=True, blank=True)
     description = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="cash_movements"

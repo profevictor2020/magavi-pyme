@@ -6,6 +6,8 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from cashbox.models import CashMovement
+from cashbox.serializers import CashMovementSerializer
 from catalog.models import Product
 from catalog.serializers import InventoryMovementSerializer, ProductSerializer
 from core.tenancy import get_current_company
@@ -35,6 +37,7 @@ _RESULT_SERIALIZERS = {
     Purchase: PurchaseSerializer,
     InventoryMovement: InventoryMovementSerializer,
     Product: ProductSerializer,
+    CashMovement: CashMovementSerializer,
 }
 
 

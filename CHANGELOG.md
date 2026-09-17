@@ -5,6 +5,29 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Nuevo intent: registrar egresos (arriendo, sueldos, servicios, otro)
+
+El único egreso que existía era la compra de mercadería a un proveedor
+(`registrar_compra`) — no había forma de registrar arriendo, sueldos,
+cuentas de servicios básicos, ni cualquier otro gasto de la pyme que no
+fuera reponer inventario, aunque el modelo `CashMovement` ya tenía un
+tipo `EXPENSE` desde antes. Nuevo intent `registrar_gasto`: crea un
+`CashMovement` directo (sin tocar stock ni productos) con una de 4
+categorías fijas (`arriendo`, `sueldos`, `servicios`, `otro`) — `otro`
+exige una descripción, las otras tres no. El resumen de caja
+(`cashbox.obtener_resumen`) no necesitó cambios, ya sumaba por tipo de
+movimiento sin importar el origen.
+
+Además, para que la categoría "otro" no se sienta rígida: el sistema
+recuerda las descripciones de gastos "otro" que cada empresa ya
+registró antes y se las muestra al modelo como contexto (mismo
+mecanismo de grounding que el vocabulario de intents de ADR-017), así
+reconoce un gasto recurrente ("pagué la multa de siempre") y reutiliza
+la misma descripción en vez de tratarlo como algo nuevo cada vez. Ver
+ADR-018 (`docs/DECISIONS.md`) para el detalle completo, incluida la
+razón de mantener las categorías fijas en vez de dejar que el modelo
+las invente.
+
 ### Vocabulario aprendido por empresa (ADR-017) + nuevo intent: producto más vendido
 
 Dos pedidos del usuario probando en vivo:

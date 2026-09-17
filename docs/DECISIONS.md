@@ -754,3 +754,76 @@ errónea; queda pendiente si se vuelve necesario. Una empresa nueva
 empieza sin vocabulario aprendido (el prompt es idéntico al de antes de
 este ADR) y solo empieza a divergir después de su primera aclaración
 explícita — el comportamiento por defecto no cambia para nadie.
+
+---
+
+## ADR-018 — Egresos manuales (`registrar_gasto`) con categorías fijas +
+aprendizaje de gastos "otro" (mismo mecanismo que ADR-017)
+
+**Contexto:** `CashMovement` ya tenía un tipo `EXPENSE` (egreso), pero
+solo se generaba como efecto de `registrar_compra` (comprarle mercadería
+a un proveedor) — no había forma de registrar arriendo, sueldos,
+cuentas de servicios básicos, ni ningún otro gasto de la pyme que no
+fuera reponer inventario. El usuario pidió esto con categorías simples
+("arriendo, sueldos, servicios, otro") pero además que el sistema
+"pueda ir aprendiendo si es otro un nuevo gasto que nunca se había
+ingresado" — el mismo pedido de fondo que ADR-017 (que el asistente se
+sienta flexible y no repita preguntas sobre algo que ya le enseñaron),
+aplicado ahora a los gastos en vez de al lenguaje de intents en general.
+
+**Decisión:** nuevo Tool Layer `cashbox/services.py::registrar_gasto`
+(company, user, amount, category, description opcional) — crea
+directamente un `CashMovement` de tipo `EXPENSE`, sin tocar stock ni
+productos (a diferencia de `registrar_compra`). `CashMovement` gana un
+campo `category` (choices: `arriendo`, `sueldos`, `servicios`, `otro`;
+null para movimientos de venta/compra, que ya se distinguen por
+`reference_type`). Nuevo intent `registrar_gasto` en el asistente
+(mutante, con confirmación como todo lo demás). El resumen de caja
+(`cashbox.obtener_resumen`) no necesitó cambios: ya sumaba por
+`type=EXPENSE` sin importar el origen.
+
+Para el "aprendizaje" de gastos "otro": en vez de duplicar la tabla
+`LearnedPhrase` de ADR-017 (esa es para frase→intent, esto es
+gasto→descripción dentro de un intent ya fijo), se usa la data que ya
+existe — los propios `CashMovement` con `category="otro"` de la
+empresa — como contexto de grounding
+(`_construir_contexto_gastos_otros`, mismo patrón que
+`_construir_contexto_catalogo`/`_construir_contexto_vocabulario`): se le
+muestran al modelo las descripciones de "otro" que esta empresa ya usó
+antes, para que reconozca un gasto recurrente y reutilice la misma
+redacción en vez de tratarlo como algo nuevo cada vez. No hace falta
+una tabla nueva ni un paso de "aclaración explícita" como en ADR-017,
+porque acá no hay ambigüedad de intent que resolver — el usuario ya
+dijo "es un gasto" y la única pregunta es cómo se llama, así que
+alcanza con mostrarle al modelo el historial real de gastos "otro".
+
+**Por qué categorías fijas (no dejar que el modelo invente categorías
+libres):** las categorías alimentan reportes/agrupación más adelante —
+un campo `category` con valores arbitrarios generados por el modelo
+sería inconsistente entre mensajes parecidos ("pago de luz" vs "cuenta
+eléctrica" vs "servicio de electricidad" tratados como 3 categorías
+distintas). Un enum cerrado de 4 valores, con "otro" como válvula de
+escape para lo que no encaja, es más simple y evita ese problema —
+la flexibilidad que pidió el usuario vive en la *descripción* dentro de
+"otro", no en inventar categorías nuevas.
+
+**Alternativas consideradas:**
+- *Reutilizar LearnedPhrase para esto:* descartado — esa tabla asocia
+  una frase completa del usuario a un intent completo; acá el intent ya
+  está resuelto (`registrar_gasto`) y lo que varía es un parámetro
+  dentro de él. Forzarlo en la misma tabla mezclaría dos conceptos
+  distintos sin necesidad.
+- *Dejar que el modelo proponga categorías libres:* descartado, ver
+  arriba.
+- *Exigir que el usuario elija la categoría de una lista en vez de que
+  el modelo la infiera del texto:* descartado por ahora — contradice el
+  pedido explícito de que el lenguaje sea flexible; el modelo ya infiere
+  categorías análogas en otros intents (ver `ajustar_inventario`
+  infiriendo el motivo).
+
+**Consecuencias:** por ahora `registrar_gasto` solo se puede invocar
+desde el chat (no hay una pantalla dedicada en la PWA ni un endpoint
+HTTP tradicional) — igual que con `LearnedPhrase`/ADR-017, el
+Tool Layer queda listo para que un futuro `CashboxViewSet` lo reutilice
+sin cambios si se agrega una pantalla de "Registrar gasto" más
+adelante.

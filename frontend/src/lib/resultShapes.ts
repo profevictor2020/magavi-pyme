@@ -63,6 +63,15 @@ export interface TopSellingProductLike {
   total: string
 }
 
+export interface ExpenseLike {
+  id: number
+  type: string
+  amount: string
+  reference_type: string
+  category: string | null
+  description: string
+}
+
 export function isReceipt(value: unknown): value is ReceiptLike {
   return (
     !!value &&
@@ -111,4 +120,9 @@ export function isTopSellingList(value: unknown): value is TopSellingProductLike
   // distingue el ranking de productos más vendidos de las otras formas
   // en lista.
   return Array.isArray(value) && (value.length === 0 || 'quantity' in value[0])
+}
+
+export function isExpense(value: unknown): value is ExpenseLike {
+  // "category" (registrar_gasto) es exclusivo de esta forma.
+  return !!value && typeof value === 'object' && 'category' in value
 }

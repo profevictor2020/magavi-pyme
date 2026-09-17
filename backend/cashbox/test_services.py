@@ -1,15 +1,17 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
 from accounts.factories import UserFactory
+from audit.models import AuditLog
 from catalog.factories import ProductFactory
 from companies.factories import CompanyFactory
 from sales.services import crear_venta
 
 from .models import CashMovement
-from .services import obtener_resumen
+from .services import obtener_resumen, registrar_gasto
 
 
 class ObtenerResumenTests(TestCase):
@@ -110,3 +112,73 @@ class ObtenerResumenTests(TestCase):
         )
         self.assertEqual(resumen["sales"]["today"], {"total": "0.00", "count": 0})
         self.assertEqual(resumen["low_stock_products"], [])
+
+
+class RegistrarGastoTests(TestCase):
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+
+    def test_creates_expense_movement_with_category(self):
+        movement = registrar_gasto(
+            company=self.company, user=self.user, amount=Decimal("150000"), category="arriendo"
+        )
+
+        self.assertEqual(movement.type, CashMovement.MovementType.EXPENSE)
+        self.assertEqual(movement.category, "arriendo")
+        self.assertEqual(movement.amount, Decimal("150000.00"))
+        self.assertEqual(movement.reference_type, CashMovement.ReferenceType.MANUAL)
+
+    def test_shows_up_in_obtener_resumen_expense_total(self):
+        registrar_gasto(
+            company=self.company, user=self.user, amount=Decimal("20000"), category="servicios"
+        )
+
+        resumen = obtener_resumen(company=self.company)
+
+        self.assertEqual(resumen["cash"]["today"]["expense"], "20000.00")
+
+    def test_otro_category_requires_description(self):
+        with self.assertRaises(ValidationError):
+            registrar_gasto(
+                company=self.company, user=self.user, amount=Decimal("5000"), category="otro"
+            )
+
+    def test_otro_category_with_description_is_allowed(self):
+        movement = registrar_gasto(
+            company=self.company,
+            user=self.user,
+            amount=Decimal("5000"),
+            category="otro",
+            description="Multa municipal",
+        )
+
+        self.assertEqual(movement.category, "otro")
+        self.assertEqual(movement.description, "Multa municipal")
+
+    def test_rejects_zero_or_negative_amount(self):
+        with self.assertRaises(ValidationError):
+            registrar_gasto(
+                company=self.company, user=self.user, amount=Decimal("0"), category="sueldos"
+            )
+
+    def test_writes_audit_log(self):
+        movement = registrar_gasto(
+            company=self.company, user=self.user, amount=Decimal("30000"), category="sueldos"
+        )
+
+        entry = AuditLog.objects.get(entity_type="CashMovement", entity_id=str(movement.id))
+        self.assertEqual(entry.action, "cashmovement.create")
+        self.assertEqual(entry.source, AuditLog.Source.UI)
+
+    def test_assistant_origin_maps_to_assistant_audit_source(self):
+        movement = registrar_gasto(
+            company=self.company,
+            user=self.user,
+            amount=Decimal("30000"),
+            category="sueldos",
+            origen="assistant",
+        )
+
+        entry = AuditLog.objects.get(entity_type="CashMovement", entity_id=str(movement.id))
+        self.assertEqual(entry.source, AuditLog.Source.ASSISTANT)
