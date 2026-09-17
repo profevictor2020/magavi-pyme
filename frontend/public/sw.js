@@ -28,6 +28,18 @@ function isApiRequest(url) {
   return url.pathname.startsWith('/api/') || url.pathname.startsWith('/media/')
 }
 
+// Navegación (el HTML de entrada) o el propio index.html: nunca hay que
+// servir esto desde caché si hay red disponible. Bug real encontrado en
+// vivo: con stale-while-revalidate para TODO (incluido el HTML), después
+// de cada despliegue el navegador seguía mostrando la versión anterior
+// de la app — un fix ya desplegado en el servidor no se veía hasta la
+// carga SIGUIENTE, porque esta carga servía el HTML viejo (que apunta a
+// los archivos JS/CSS de la build anterior) instantáneo desde caché, sin
+// esperar la red.
+function isNavigationRequest(request, url) {
+  return request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')
+}
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
@@ -35,10 +47,27 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Stale-while-revalidate: sirve desde caché al instante si existe,
-  // y en paralelo actualiza la caché con la respuesta de red — así el
-  // shell (HTML/JS/CSS con nombre hasheado por build) se cachea solo,
-  // sin que este archivo necesite conocer los nombres de antemano.
+  if (isNavigationRequest(event.request, url)) {
+    // Network-first: intenta la red siempre primero, y solo cae a la
+    // caché si no hay conexión — así una build nueva se ve de inmediato
+    // en la próxima carga, no una después.
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()))
+          }
+          return response
+        })
+        .catch(() => caches.open(CACHE_NAME).then((cache) => cache.match(event.request))),
+    )
+    return
+  }
+
+  // Assets con nombre hasheado por el build (JS/CSS/imágenes): un
+  // archivo nuevo siempre tiene un nombre distinto, así que cachearlos
+  // agresivamente es seguro — stale-while-revalidate sigue siendo
+  // correcto acá (sirve al instante, actualiza la caché en paralelo).
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) =>
       cache.match(event.request).then((cached) => {

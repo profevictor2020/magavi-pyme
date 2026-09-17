@@ -5,6 +5,24 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### El service worker servía la app vieja después de cada despliegue
+
+Bug real, y probablemente la causa de varios "esto ya lo arreglaste
+pero sigue igual" al probar en vivo: `sw.js` cacheaba el HTML de
+entrada de la app con "stale-while-revalidate" — servía la versión
+cacheada al instante y solo actualizaba la caché en paralelo para la
+*próxima* carga. Después de cada despliegue nuevo, la carga siguiente
+seguía mostrando la build anterior (JS/CSS incluidos, porque el HTML
+viejo apunta a esos archivos), y recién la carga de DESPUÉS de esa
+mostraba el fix real — un ciclo completo de confusión por cada cambio.
+
+Ahora el HTML de entrada usa "network-first" (intenta la red siempre
+primero, cae a caché solo sin conexión), mientras que los archivos con
+nombre hasheado por el build (JS/CSS/imágenes) siguen con
+stale-while-revalidate como antes — esos sí son seguros de cachear
+agresivo porque un archivo nuevo siempre tiene un nombre distinto. Con
+esto, un despliegue nuevo se ve en la próxima carga, no una después.
+
 ### Nuevos intents: consultar y corregir gastos (`consultar_gastos`, `actualizar_gasto`)
 
 `registrar_gasto` (ver más abajo) solo cubría la mitad del ciclo:
