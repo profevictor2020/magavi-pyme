@@ -15,6 +15,8 @@ from .orchestrator import (
     _construir_contexto_catalogo,
     _construir_contexto_gastos_recientes,
     _construir_contexto_vocabulario,
+    _construir_historial,
+    _resumen_resultado_para_historial,
     interpretar_y_proponer,
 )
 
@@ -585,3 +587,146 @@ class ConstruirContextoGastosRecientesTests(TestCase):
         )
 
         self.assertEqual(_construir_contexto_gastos_recientes(self.company), "")
+
+
+class ResumenResultadoParaHistorialTests(TestCase):
+    """Ver docs/DECISIONS.md ADR-020: lo que se guarda del lado del
+    asistente tiene que traer el dato real, no solo un mensaje
+    genérico, para que un mensaje de seguimiento pueda resolverse."""
+
+    def test_no_entendido_usa_la_respuesta_tal_cual(self):
+        respuesta = "No entendí bien tu mensaje: motivo. ¿Puedes darme más detalles?"
+        resultado = {"status": "no_entendido", "message": respuesta}
+
+        self.assertEqual(_resumen_resultado_para_historial(respuesta, resultado), respuesta)
+
+    def test_pending_confirmation_usa_la_respuesta_tal_cual(self):
+        respuesta = "Tengo listo: registrar_gasto. ¿Confirmas? (propuesta #1)"
+        resultado = {"status": "pending_confirmation", "intent": "registrar_gasto"}
+
+        self.assertEqual(_resumen_resultado_para_historial(respuesta, resultado), respuesta)
+
+    def test_executed_incluye_el_resultado_real(self):
+        respuesta = "Listo, aquí está la información."
+        resultado = {
+            "status": "executed",
+            "result": [{"id": 3, "category": "servicios", "description": "", "amount": "18500.00"}],
+        }
+
+        contenido = _resumen_resultado_para_historial(respuesta, resultado)
+
+        self.assertIn(respuesta, contenido)
+        self.assertIn("servicios", contenido)
+        self.assertIn("18500.00", contenido)
+
+    def test_trunca_resultados_grandes(self):
+        resultado = {
+            "status": "executed",
+            "result": [{"id": i, "name": f"Producto {i}"} for i in range(200)],
+        }
+
+        contenido = _resumen_resultado_para_historial("Listo, aquí está la información.", resultado)
+
+        self.assertLessEqual(len(contenido), 900)
+        self.assertTrue(contenido.endswith("…"))
+
+
+class ConstruirHistorialTests(TestCase):
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+
+    def test_vacio_sin_conversacion(self):
+        self.assertEqual(_construir_historial(None), [])
+
+    def test_vacio_sin_mensajes_previos(self):
+        conversation = Conversation.objects.create(company=self.company, user=self.user)
+        self.assertEqual(_construir_historial(conversation), [])
+
+    def test_incluye_mensajes_previos_en_orden_cronologico(self):
+        conversation = Conversation.objects.create(company=self.company, user=self.user)
+        Message.objects.create(conversation=conversation, role=Message.Role.USER, content="primero")
+        Message.objects.create(
+            conversation=conversation, role=Message.Role.ASSISTANT, content="respuesta"
+        )
+
+        self.assertEqual(
+            _construir_historial(conversation),
+            [
+                {"role": "user", "content": "primero"},
+                {"role": "assistant", "content": "respuesta"},
+            ],
+        )
+
+    def test_no_excede_el_maximo_de_mensajes(self):
+        conversation = Conversation.objects.create(company=self.company, user=self.user)
+        for i in range(20):
+            Message.objects.create(
+                conversation=conversation, role=Message.Role.USER, content=f"mensaje {i}"
+            )
+
+        historial = _construir_historial(conversation)
+
+        self.assertEqual(len(historial), 10)
+        # Los más recientes, no los primeros.
+        self.assertEqual(historial[-1]["content"], "mensaje 19")
+
+
+class MemoriaConversacionalTests(TestCase):
+    """Ver docs/DECISIONS.md ADR-020: sin memoria conversacional, un
+    mensaje de seguimiento como "¿de qué es ese gasto?" no tenía forma
+    de resolverse — el modelo nunca veía lo que se acababa de mostrar."""
+
+    def setUp(self):
+        self.company = CompanyFactory()
+        self.user = UserFactory()
+
+    def test_segundo_mensaje_incluye_el_resultado_del_primero_en_el_historial(self):
+        CashMovement.objects.create(
+            company=self.company,
+            type=CashMovement.MovementType.EXPENSE,
+            amount=Decimal("18500"),
+            reference_type=CashMovement.ReferenceType.MANUAL,
+            category=CashMovement.Category.SERVICIOS,
+            description="",
+            created_by=self.user,
+        )
+        conversation = Conversation.objects.create(company=self.company, user=self.user)
+        llm = FakeLLMProvider([_json("consultar_gastos"), _json("consultar_gastos")])
+
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="qué gastos llevamos este mes",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+        interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="de qué es ese gasto",
+            conversation=conversation,
+            llm_provider=llm,
+        )
+
+        segunda_llamada = llm.llamadas[1]
+        contenidos = " ".join(m["content"] for m in segunda_llamada)
+        self.assertIn("servicios", contenidos)
+        self.assertIn("qué gastos llevamos este mes", contenidos)
+
+    def test_sin_conversacion_no_hay_historial_en_el_segundo_llamado(self):
+        llm = FakeLLMProvider([_json("consultar_gastos"), _json("consultar_gastos")])
+
+        interpretar_y_proponer(
+            company=self.company, user=self.user, mensaje="qué gastos llevamos", llm_provider=llm
+        )
+        interpretar_y_proponer(
+            company=self.company, user=self.user, mensaje="de qué es ese gasto", llm_provider=llm
+        )
+
+        segunda_llamada = llm.llamadas[1]
+        roles = [m["role"] for m in segunda_llamada]
+        # Sin conversation=..., no hay Message que guardar ni historial
+        # que reconstruir — solo el system prompt/contexto y el mensaje
+        # actual, como antes de este cambio.
+        self.assertEqual(roles.count("user"), 1)

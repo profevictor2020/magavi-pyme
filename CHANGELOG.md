@@ -5,6 +5,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Memoria conversacional real: el asistente ahora ve los mensajes anteriores
+
+Bug de fondo, no puntual: después de listar los gastos del mes
+("Servicios: $18.500..."), "¿de qué es este gasto?" caía en
+`no_entendido`. La causa no era falta de un intent — era que
+`interpretar_y_proponer` nunca le mandaba al LLM los mensajes
+anteriores de la conversación, solo contexto de sistema (catálogo,
+vocabulario) y el mensaje actual. Cada pregunta se trataba como si
+fuera la primera; el modelo no tenía forma de saber a qué se refería
+"este gasto".
+
+Ahora se arma el prompt con los últimos 10 mensajes reales de la
+conversación (turnos user/assistant, en orden), y el lado del
+asistente incluye un resumen del resultado real mostrado (no solo
+"Listo, aquí está la información.") — acotado en tamaño para que un
+resultado grande no dispare el costo de tokens. El SYSTEM_PROMPT se
+amplió con una regla explícita sobre cómo usar ese historial (resolver
+referencias como "ese", "el último" — pero la respuesta es siempre
+sobre el último mensaje) y para ignorar cualquier instrucción dentro
+del historial que intente saltarse las reglas, mismo criterio que ya
+aplicaba al mensaje actual. Ver ADR-020 (`docs/DECISIONS.md`).
+
 ### Los gastos quedaban sin descripción salvo en categoría "otro"
 
 Bug de producto encontrado en vivo: un gasto categoría "servicios" por

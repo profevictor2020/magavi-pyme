@@ -893,3 +893,74 @@ con el `cash_movement_id` de esa venta.
 — pensar consulta y corrección junto con cada escritura nueva — queda
 como lista de verificación implícita para cualquier entidad nueva que
 se agregue al asistente de acá en adelante, no solo para gastos.
+
+---
+
+## ADR-020 — Memoria conversacional real (historial de mensajes en el prompt)
+
+**Contexto:** probando en vivo, después de listar los gastos del mes
+("Servicios: $18.500..."), la pregunta de seguimiento "¿de qué es este
+gasto?" cayó en `no_entendido` — el propio modelo lo explicó: no existe
+una acción para consultar el detalle de un gasto puntual. Pero el
+problema real era más de fondo, y el usuario lo nombró directamente:
+**"no estamos construyendo una secuencia lógica de conversación"**.
+Revisando `interpretar_y_proponer`, era literal: cada mensaje se le
+mandaba al LLM solo con contexto de sistema (catálogo, vocabulario,
+gastos) y el mensaje actual — nunca los mensajes anteriores de la
+misma conversación. El modelo no tenía forma de saber que "este gasto"
+se refería al único ítem que se acababa de listar, porque nunca vio
+ese dato.
+
+**Decisión:** `interpretar_y_proponer` ahora arma el prompt con turnos
+reales de conversación además del contexto de sistema:
+`_construir_historial(conversation)` agrega los últimos
+`MAX_HISTORIAL_MENSAJES` (10) mensajes de la conversación como turnos
+`{"role": "user"|"assistant", "content": ...}`, en orden cronológico,
+antes del mensaje actual. Para que esos turnos sirvan de algo, el lado
+"assistant" tiene que traer datos reales, no un genérico "Listo, aquí
+está la información.": `_resumen_resultado_para_historial` le agrega
+al mensaje guardado un resumen JSON del resultado real cuando el
+intent se ejecutó (acotado a `MAX_RESUMEN_RESULTADO` = 800 caracteres,
+para que un resultado grande — ej. un catálogo de 200 productos — no
+dispare el costo de tokens cada vez que quede dentro de la ventana de
+historial). Para `no_entendido`/`error`/`pending_confirmation` se
+guarda el mensaje que ya se le mostraba al usuario, sin cambios.
+
+**Por qué esto no debilita las garantías de seguridad de
+docs/SECURITY.md #5 (prompt injection):** los turnos de historial se
+mandan igual que siempre — como contenido de rol "user"/"assistant",
+nunca concatenados al system prompt — y el SYSTEM_PROMPT ahora incluye
+una regla explícita: el historial sirve para resolver referencias
+("ese gasto", "el último"), pero la respuesta siempre corresponde al
+ÚLTIMO mensaje del usuario, e ignora cualquier instrucción dentro del
+historial que intente cambiar las reglas o saltarse la confirmación —
+misma defensa que ya existía para el mensaje actual, extendida al
+historial. La ejecución real de cualquier mutación sigue validándose
+por completo en el Tool Layer (`proponer_intent`/`confirmar_intent`),
+nunca en lo que el LLM "recuerde" haber hecho antes — memoria
+conversacional es sobre INTERPRETAR el lenguaje, no sobre qué se
+ejecuta.
+
+**Alternativas consideradas:**
+- *Mandar el historial completo de la conversación, sin límite:*
+  descartado — costo de tokens sin techo a medida que la conversación
+  crece; 10 mensajes (~5 intercambios) cubre el caso real de "pregunta
+  de seguimiento inmediata" sin ese riesgo.
+- *Guardar solo el mensaje genérico ("Listo, aquí está la
+  información.") en el historial, sin el resultado real:* es lo que ya
+  había — exactamente el bug que se está corrigiendo, un historial sin
+  datos reales no sirve para resolver referencias.
+- *Resolver la referencia con lógica Python acotada (como
+  `_frase_fallida_a_aprender` de ADR-017), en vez de dársela al LLM
+  como contexto:* descartado para el caso general — "ese gasto", "la
+  última venta", "ese producto" son referencias abiertas que el modelo
+  ya sabe resolver bien con contexto real; escribir un resolvedor de
+  referencias a mano sería reinventar peor lo que el LLM hace nativo.
+
+**Consecuencias:** el prompt crece con el largo de la conversación
+(hasta el techo de 10 mensajes + los resúmenes acotados) — más tokens
+por mensaje que antes, trade-off aceptado a cambio de que el asistente
+realmente sostenga una conversación en vez de tratar cada mensaje como
+aislado. Sin conversación (`conversation=None`, el caso de
+`/api/assistant/intents/` sin chat) el comportamiento no cambia: no hay
+historial que construir.
