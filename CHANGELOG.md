@@ -5,6 +5,26 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### La voz decía mal los montos grandes + "¿cómo va el negocio?" no se entendía
+
+Dos bugs reales encontrados escuchando las respuestas en vivo:
+
+- `formatCLPSpoken` (agregado en el cambio anterior para decir "pesos"
+  en vez de "$") seguía usando el separador de miles de formatCLP
+  ("7.000"), y un sintetizador de voz lee ese "." como punto decimal,
+  no como separador — "7.000 pesos" se escuchaba como "7 pesos" en vez
+  de "siete mil pesos". Se sacó el separador de miles: ahora dice un
+  entero plano ("7000 pesos"), que no tiene esa ambigüedad. La
+  visualización en pantalla (formatCLP, con "$7.000") no cambió — ahí
+  el punto SÍ es la convención correcta.
+- "¿cómo va el negocio?" caía en `no_entendido` porque no menciona la
+  palabra "ventas" — el usuario tuvo que aclarar "me refiero a cuánto
+  hemos vendido". Se amplió el SYSTEM_PROMPT de `consultar_ventas` para
+  que preguntas generales y coloquiales sobre el negocio ("¿cómo va el
+  negocio?", "¿cómo vamos?", "cuéntame del negocio") se interpreten
+  directamente como esa consulta, sin pedir que el usuario use la
+  palabra exacta.
+
 ### Nuevo intent: ventas de UN producto puntual + la voz ahora dice "pesos"
 
 Dos bugs reales encontrados probando en vivo:

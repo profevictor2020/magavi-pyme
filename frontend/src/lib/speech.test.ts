@@ -24,8 +24,14 @@ describe('matchYesNo', () => {
 describe('formatCLPSpoken', () => {
   it('dice "pesos" en vez de depender del símbolo "$" (que un sintetizador \
 puede leer como dólares)', () => {
-    expect(formatCLPSpoken(3000)).toBe('3.000 pesos')
     expect(formatCLPSpoken('890')).toBe('890 pesos')
+  })
+
+  it('no usa separador de miles: un sintetizador de voz lee el "." de \
+formatCLP como punto decimal, no como separador ("7.000" se escucha \
+como "7", no "siete mil")', () => {
+    expect(formatCLPSpoken(7000)).toBe('7000 pesos')
+    expect(formatCLPSpoken('10000')).toBe('10000 pesos')
   })
 })
 

@@ -67,8 +67,14 @@ actual que aparece en el catálogo (nuevo valor = precio actual ± \
 cambio) — no le pidas al usuario que haga la cuenta.
 - consultar_ventas: {} (total vendido HOY y esta semana, sumando TODOS \
 los productos — ej. "¿cuánto vendí hoy?", "¿cómo van las ventas de la \
-semana?". Si la pregunta es sobre cuánto se vendió de un producto \
-puntual, usa consultar_ventas_producto en vez de este)
+semana?". También úsalo para preguntas generales y coloquiales sobre \
+cómo va el negocio, sin que el usuario mencione la palabra "ventas" \
+explícitamente — ej. "¿cómo va el negocio?", "¿cómo vamos?", "cuéntame \
+del negocio", "¿cómo estamos hoy?": en el contexto de este asistente, \
+esa pregunta significa "cuánto he vendido", así que respóndela con este \
+intent en vez de pedir más detalles. Si la pregunta es sobre cuánto se \
+vendió de un producto puntual, usa consultar_ventas_producto en vez de \
+este)
 - consultar_ventas_producto: {"product_id": <int>} (cuántas unidades se \
 vendieron de UN producto puntual, hoy y esta semana — ej. "¿cuántas \
 gomas hemos vendido?", "¿cuánto vendí de X esta semana?")
