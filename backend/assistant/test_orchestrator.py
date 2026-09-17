@@ -799,3 +799,29 @@ class ResponderIntentTests(TestCase):
         segunda_llamada = llm.llamadas[1]
         contenidos = " ".join(m["content"] for m in segunda_llamada)
         self.assertIn("Ese gasto de servicios no tiene descripción.", contenidos)
+
+    def test_responder_admite_una_respuesta_negativa_de_no_aplica(self):
+        # Bug real: "hay otro gasto más asociado" con un solo gasto en el
+        # contexto cayó en no_entendido, aunque el modelo ya sabía la
+        # respuesta ("no, no hay otro"). Una respuesta negativa/"no
+        # aplica" es tan válida para "responder" como una positiva — ver
+        # el ejemplo (2) agregado al SYSTEM_PROMPT.
+        llm = FakeLLMProvider(
+            [
+                _json(
+                    "responder",
+                    {"respuesta": "No, por ahora ese es el único gasto registrado."},
+                )
+            ]
+        )
+
+        resultado = interpretar_y_proponer(
+            company=self.company,
+            user=self.user,
+            mensaje="hay otro gasto más asociado",
+            llm_provider=llm,
+        )
+
+        self.assertEqual(resultado["status"], "answered")
+        self.assertEqual(resultado["message"], "No, por ahora ese es el único gasto registrado.")
+        self.assertEqual(PendingAction.objects.for_company(self.company).count(), 0)

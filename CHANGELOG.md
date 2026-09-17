@@ -5,6 +5,29 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### "responder" no cubría respuestas negativas ("no hay otro", "no aplica")
+
+Bug encontrado en vivo: con un solo gasto registrado, "hay otro gasto \
+más asociado" listó de nuevo el mismo gasto (correcto, consultar_gastos \
+no tiene otro que mostrar) — pero el siguiente mensaje, "pero ese gasto \
+ya me lo dijiste, hay uno distinto", cayó en `no_entendido` a pesar de \
+que el propio motivo del modelo ya contenía la respuesta completa: \
+"Solo hay un gasto registrado... no existe otro distinto". El modelo \
+sabía la respuesta pero la clasificó como "no entendí" en vez de \
+"responder", porque la descripción de `responder` en el SYSTEM_PROMPT \
+solo daba un ejemplo de respuesta POSITIVA (explicar un dato que sí \
+existe) — no cubría el caso de explicar con certeza que algo NO existe \
+o no aplica.
+
+Se amplió la descripción de `responder` en el SYSTEM_PROMPT: una \
+respuesta negativa o "no aplica" armada con datos reales del contexto \
+es tan válida como una positiva, y `no_entendido` se reserva \
+explícitamente para cuando de verdad falta información — nunca para \
+cuando el modelo ya tiene la respuesta, aunque esa respuesta sea "no". \
+Cambio puramente de prompt, sin tocar código de la rama `responder` \
+(ya funcionaba correctamente, solo faltaba que el modelo la eligiera \
+en este caso). Ver ADR-021 (`docs/DECISIONS.md`).
+
 ### La voz seguía diciendo "dólares" en las respuestas del intent "responder"
 
 Bug encontrado en vivo justo después del punto anterior: el fix de

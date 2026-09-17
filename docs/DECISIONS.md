@@ -1049,3 +1049,20 @@ modelo sobre por qué no entendió.
 tratarlo igual que `no_entendido`/`error` (texto simple, sin acción
 pendiente). No hay migración de base de datos ni cambios al Tool
 Layer: es puramente una rama nueva en el orquestador y en el prompt.
+
+**Addendum (mismo día):** probando en vivo, "hay otro gasto más
+asociado" (con un solo gasto en el contexto) seguido de "pero ese
+gasto ya me lo dijiste, hay uno distinto" volvió a caer en
+`no_entendido` — pese a que el `motivo` que el modelo devolvió ya
+contenía la respuesta completa ("Solo hay un gasto registrado...no
+existe otro distinto"). La rama de código funcionaba bien; el problema
+era que el SYSTEM_PROMPT solo ejemplificaba `responder` con respuestas
+POSITIVAS (explicar un dato que sí existe), así que el modelo no
+generalizó a respuestas NEGATIVAS ("no, no hay otro"). Se amplió la
+descripción de `responder` para cubrir explícitamente ese caso —
+"si puedes explicar con certeza por qué algo no existe/no aplica,
+usando datos reales, eso es responder" — y se reforzó la regla de
+`no_entendido`: es solo para cuando de verdad falta información, nunca
+para cuando el modelo ya tiene la respuesta (incluida una respuesta
+"no"). Sin cambios de código ni de la API — puramente una aclaración
+del prompt.
