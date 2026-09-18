@@ -395,3 +395,40 @@ y en particular:
 - El LLM y el OCR corren en infraestructura propia (self-hosted), no en un
   proveedor externo, en el ambiente de demo/producción.
 - `AuditLog` reconstruye el historial de cualquier operación del guion.
+
+---
+
+## Backlog post-MVP (sin fecha, requiere levantar recursos)
+
+Ideas surgidas probando el MVP en vivo, fuera del alcance de las fases
+0–12 — quedan registradas acá para no perderlas, sin comprometerse a
+una fecha.
+
+### Marketing automatizado: publicar en redes sociales + generar video
+
+**Idea:** que el asistente se conecte directamente a Instagram (u otra
+red social) de la pyme y genere un video promocional del producto que
+menos se está vendiendo (usando el ranking que ya existe vía
+`consultar_productos_mas_vendidos`/`_construir_contexto_ventas_resumen`,
+ver ADR-023).
+
+**Por qué se difiere, no se descarta:** es una capacidad
+fundamentalmente distinta a todo lo construido hasta ahora — no es una
+extensión del Tool Layer existente, es integrar dos sistemas externos
+nuevos:
+- **Conexión a Instagram**: requiere una app registrada en Meta, pasar
+  su proceso de verificación de negocio, que el dueño de la pyme
+  autorice el acceso vía OAuth, y guardar/renovar tokens de forma
+  segura — un proceso de aprobación de semanas/meses con Meta, no una
+  integración técnica simple.
+- **Generación de video**: no hay nada en el stack actual que genere
+  video; requeriría contratar un servicio externo de generación de
+  video (con costo por uso) y decidir cómo se controla la calidad/marca
+  de un video generado automáticamente antes de publicarlo a nombre
+  real del negocio.
+
+**Primer paso más chico, si se retoma antes de tener recursos para lo
+anterior:** el asistente ya puede redactar el *texto* de un post/caption
+sugerido usando el intent `asesoria` existente (ADR-023) — el dueño lo
+copia y publica manualmente. Eso no requiere ninguna integración
+externa nueva.
